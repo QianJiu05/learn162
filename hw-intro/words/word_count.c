@@ -37,6 +37,7 @@ int init_words(WordCount **wclist) {
      Returns 0 if no errors are encountered
      in the body of this function; 1 otherwise.
   */
+  
   *wclist = NULL;
   return 0;
 }
@@ -47,12 +48,23 @@ ssize_t len_words(WordCount *wchead) {
      this function.
   */
     size_t len = 0;
+    WordCount *temp = wchead;
+    while(temp->next != NULL){
+      len++;
+      temp = temp->next;
+    }
     return len;
 }
 
 WordCount *find_word(WordCount *wchead, char *word) {
   /* Return count for word, if it exists */
-  WordCount *wc = NULL;
+  WordCount *wc = wchead;
+  while(wc != NULL){
+    if(strcmp(wc->word,word) == 0){
+      break;
+    }
+    wc = wc->next;
+  }
   return wc;
 }
 
@@ -61,7 +73,42 @@ int add_word(WordCount **wclist, char *word) {
      Otherwise insert with count 1.
      Returns 0 if no errors are encountered in the body of this function; 1 otherwise.
   */
- return 0;
+  WordCount *temp = find_word(*wclist,word);
+  if(temp != NULL){
+    temp->count++;
+  }else{//word don't exist, should be added
+    //new block of words.
+    bool added = false;
+    WordCount *to_add = (WordCount*)malloc(sizeof(WordCount));
+    if(to_add == NULL){
+      printf("to_add is null!\n");
+      return 1;
+    }
+    to_add->word = new_string(word);
+    to_add->count = 1;
+    to_add->next = NULL;
+    
+    //
+    if(*wclist == NULL){
+      *wclist = to_add;
+    }else{
+      WordCount *now = *wclist;
+
+      while(now->next != NULL){
+            if(strcmp(word,now->word)>0 &&(strcmp(word,now->next->word) <0) ){//find the position: smaller than last, bigger than next
+              to_add->next = now->next;
+              now->next = to_add;
+              added = true;
+            }else{//pointer go to next
+              now = now->next;
+            }
+      }
+      if(added == false){
+        now->next = to_add;
+      }
+    }
+  }
+  return 0;
 }
 
 void fprint_words(WordCount *wchead, FILE *ofile) {

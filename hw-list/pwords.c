@@ -44,7 +44,10 @@ int main(int argc, char* argv[]) {
     /* Process stdin in a single thread. */
     count_words(&word_counts, stdin);
   } else {
-    /* TODO */
+    /* TODO, 从文件中读取word */
+
+
+
   }
 
   /* Output final result of all threads' work. */

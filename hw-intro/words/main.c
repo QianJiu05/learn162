@@ -46,6 +46,19 @@ WordCount *word_counts = NULL;
  */
 int num_words(FILE* infile) {
   int num_words = 0;
+  char c;
+  //if status ==true, last status == false --> out the word boundary
+  bool status = false, last_status = false;
+//word is defined as a sequence of contiguous alphabetical characters of length greater than one
+  while((c = fgetc(infile)) != EOF){
+    if(isalpha(c)){
+      status = true;
+    }else{
+      status = false;
+      if(last_status == true) num_words++;
+    }
+    last_status = status;
+  }
 
   return num_words;
 }
@@ -62,6 +75,31 @@ int num_words(FILE* infile) {
  * and 0 otherwise.
  */
 int count_words(WordCount **wclist, FILE *infile) {
+  char store[MAX_WORD_LEN];
+  bool status = false, last_status = false;
+  int word_len = 0;
+  char c;
+  int idx = 0;
+  while((c = fgetc(infile)) != EOF){
+    if(isalpha(c)){
+      status = true;
+      store[idx] = tolower(c);
+      word_len++;
+      idx++;
+    }else{//counter space
+      status = false;
+      store[idx] = '\0';
+      
+      if(last_status == true && word_len > 1){//do insert
+        add_word(wclist,store);
+      } 
+      
+      idx = 0;
+      word_len = 0;
+    }
+    last_status = status;
+  }
+
   return 0;
 }
 
@@ -137,13 +175,27 @@ int main (int argc, char *argv[]) {
     // At least one file specified. Useful functions: fopen(), fclose().
     // The first file can be found at argv[optind]. The last file can be
     // found at argv[argc-1].
+
+    for(int i = optind; i <= argc -1 ; i++){
+      infile = fopen(argv[i],"r");
+      total_words+= num_words(infile);
+      fclose(infile);
+    }
+
+    //segmentation fault happened
+
+    for(int i = optind; i <= argc -1 ; i++){
+      infile = fopen(argv[i],"r");
+      count_words(&word_counts,infile);
+      fclose(infile);
+    }
+    
   }
 
   if (count_mode) {
     printf("The total number of words is: %i\n", total_words);
-  } else {
+  } else {//frequecy mode 
     wordcount_sort(&word_counts, wordcount_less);
-
     printf("The frequencies of each word are: \n");
     fprint_words(word_counts, stdout);
 }
