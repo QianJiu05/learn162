@@ -71,7 +71,7 @@ word_count_t* find_word(word_count_list_t* wclist, char* word) {
 
 word_count_t* add_word(word_count_list_t* wclist, char* word) {
   /* TODO */
-  printf("Adding word(wordcout p): %s\n", word);
+  // printf("Adding word(wordcout p): %s\n", word);
   word_count_t* wc = NULL;
   if((wc = find_word(wclist, word)) != NULL) {
     wc->count++;
@@ -89,7 +89,7 @@ word_count_t* add_word(word_count_list_t* wclist, char* word) {
 void fprint_words(word_count_list_t* wclist, FILE* outfile) {
   /* TODO */
   /* Please follow this format: fprintf(<file>, "%i\t%s\n", <count>, <word>); */
-
+  printf("printing---\n");
   struct list_elem* temp = list_begin(&(wclist->lst));
   while(temp != list_end(&(wclist->lst))) {
     word_count_t* wc = list_entry(temp, word_count_t,elem );
@@ -102,4 +102,10 @@ void fprint_words(word_count_list_t* wclist, FILE* outfile) {
 void wordcount_sort(word_count_list_t* wclist,
                     bool less(const word_count_t*, const word_count_t*)) {
   /* TODO */
+
+  // struct list_elem* temp = list_begin(&(wclist->lst));
+
+  list_sort(&(wclist->lst), (list_less_func*)less, NULL);
+
+
 }
