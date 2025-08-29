@@ -64,7 +64,7 @@ word_count_t* find_word(word_count_list_t* wclist, char* word) {
 
 word_count_t* add_word(word_count_list_t* wclist, char* word) {
   /* TODO */
-  printf("Adding word(wordcount_c): %s\n", word);
+  // printf("Adding word(wordcount_c): %s\n", word);
   word_count_t* wc = NULL;
   if((wc = find_word(wclist, word)) != NULL) {
     wc->count++;
@@ -95,14 +95,16 @@ void fprint_words(word_count_list_t* wclist, FILE* outfile) {
 /* Sort a word count list using the provided comparator function. */
 static bool less_list(const struct list_elem* ewc1, const struct list_elem* ewc2, void* aux) {
   /* TODO */
-  //传入list_elem可以找到word cout t，但这不是typedef struct list word_count_list_t的内容
-  word_count_t* wc1 = list_entry(ewc1, word_count_t, elem);
-  word_count_t* wc2 = list_entry(ewc2, word_count_t, elem);
 
-  // aux 传进来的是比较函数指针
+  word_count_t* wc1 = list_entry(ewc1, word_count_t, elem);
+  word_count_t* wc2 = list_entry(ewc2, word_count_t,elem);
+  
+
+  /* aux 实际上是一个函数指针，强制转换成less* */
   bool (*less)(const word_count_t*, const word_count_t*) = aux;
 
   return less(wc1, wc2);
+
 }
 
 //这是提供的比较函数
@@ -111,3 +113,5 @@ void wordcount_sort(word_count_list_t* wclist,
 {
   list_sort(wclist, less_list, less);
 }
+
+

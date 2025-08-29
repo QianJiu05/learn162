@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "list.h": "c",
-        "stddef.h": "c"
+        "stddef.h": "c",
+        "compare": "c"
     }
 }

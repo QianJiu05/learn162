@@ -37,7 +37,6 @@ typedef struct word_count {
   struct list_elem elem;
 } word_count_t;
 
-
 typedef struct word_count_list {
   struct list lst;
   pthread_mutex_t lock;
@@ -99,13 +98,23 @@ void fprint_words(word_count_list_t* wclist, FILE* outfile) {
 
 }
 
+
+
+/* Sort a word count list using the provided comparator function. */
+static bool less_list(const struct list_elem* ewc1, const struct list_elem* ewc2, void* aux) {
+  /* TODO */
+
+  word_count_t* wc1 = list_entry(ewc1, word_count_t, elem);
+  word_count_t* wc2 = list_entry(ewc2, word_count_t,elem);
+  
+  /* aux 实际上是一个函数指针，强制转换成less* */
+  bool (*less)(const word_count_t*, const word_count_t*) = aux;
+  return less(wc1, wc2);
+}
+
 void wordcount_sort(word_count_list_t* wclist,
                     bool less(const word_count_t*, const word_count_t*)) {
   /* TODO */
-
-  // struct list_elem* temp = list_begin(&(wclist->lst));
-
-  list_sort(&(wclist->lst), (list_less_func*)less, NULL);
-
+  list_sort(&(wclist->lst), less_list, less);
 
 }

@@ -91,7 +91,11 @@ int count_words(WordCount **wclist, FILE *infile) {
       store[idx] = '\0';
       
       if(last_status == true && word_len > 1){//do insert
+
+        pthread_mutex_lock(&((*wclist)->lock));
         add_word(wclist,store);
+        pthread_mutex_unlock(&((*wclist)->lock));
+
       } 
       
       idx = 0;
@@ -124,6 +128,8 @@ static int display_help(void) {
  * Handle command line flags and arguments.
  */
 int main (int argc, char *argv[]) {
+  static int begin,finish;
+  begin = time(NULL);
 
   // Count Mode (default): outputs the total amount of words counted
   bool count_mode = true;
@@ -197,7 +203,12 @@ int main (int argc, char *argv[]) {
   } else {//frequecy mode 
     wordcount_sort(&word_counts, wordcount_less);
     printf("The frequencies of each word are: \n");
-    fprint_words(word_counts, stdout);
+    FILE* output = fopen("res_of_words.txt","w");
+    fprint_words(word_counts, output);
+    fclose(output);
 }
+
+  finish = time(NULL);
+  printf("The total time is: %d seconds\n", finish - begin);
   return 0;
 }

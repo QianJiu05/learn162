@@ -87,7 +87,7 @@ int main(int argc, char* argv[]) {
 
 
   /* Output final result of all threads' work. */
-  // wordcount_sort(&word_counts, less_count);
+  wordcount_sort(&word_counts, less_count);
 
   FILE* outfile = fopen("word_count_res.txt","w");
   fprint_words(&word_counts, outfile);
