@@ -119,6 +119,9 @@ static void start_process(void* file_name_) {
     thread_exit();
   }
 
+  if_.esp = (PHYS_BASE - 16);
+  if_.eax = 0x1;
+
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
@@ -280,6 +283,8 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   t->pcb->pagedir = pagedir_create();
   if (t->pcb->pagedir == NULL)
     goto done;
+
+
   process_activate();
 
   /* Open executable file. */
