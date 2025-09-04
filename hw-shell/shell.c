@@ -16,6 +16,9 @@
 /* Convenience macro to silence compiler warnings about unused function parameters. */
 #define unused __attribute__((unused))
 
+#define PIPE_READ_SIDE 0
+#define PIPE_WRITE_SIDE 1
+
 /* Whether the shell is connected to an actual terminal or not. */
 bool shell_is_interactive;
 
@@ -38,7 +41,7 @@ static int path_init(char*** head_path);
 bool is_full_path(char* path);
 void complete_and_run(struct tokens* tokens);
 bool check_stdio(int cmd_num,char* args[],int* infile,int* outfile);
-void args_no_redirect(char* old_args[],char* new_args[],int cmd_num);
+void get_redirect_args(char* old_args[],char* new_args[],int cmd_num);
 /* Built-in command functions take token array (see parse.h) and return int */
 typedef int cmd_fun_t(struct tokens* tokens);
 
@@ -145,24 +148,19 @@ void complete_and_run(struct tokens* tokens){
 
   if(is_redirect == true){
     if(infile != -1){
-      // dup2(fileno(infile),STDIN_FILENO);
       dup2(infile,STDIN_FILENO);
-      // printf("infile changed\n");
     }
     if(outfile != -1){
-      // dup2(fileno(outfile),STDOUT_FILENO);
       dup2(outfile,STDOUT_FILENO);
-      // printf("outfile changed\n");
     }
     if((outfile == -1) && (infile == -1)){
       perror("no file!\n");
     }
     close(infile);
     close(outfile);
-    // fclose(infile);
-    // fclose(outfile);
 
-    args_no_redirect(args,new_args,cmd_num);
+
+    get_redirect_args(args,new_args,cmd_num);
   }
 
   // /* 打印args*/
@@ -198,7 +196,7 @@ void complete_and_run(struct tokens* tokens){
   perror("execv failed\n");
 }
 
-void args_no_redirect(char* old_args[],char* new_args[],int cmd_num){
+void get_redirect_args(char* old_args[],char* new_args[],int cmd_num){
   int i = 0, j = 0;
   while(i < cmd_num){// i = cmd_num是null
     if((strcmp(old_args[i],"<") == 0) || (strcmp(old_args[i],">") == 0)){
@@ -233,7 +231,6 @@ bool check_stdio(int cmd_num,char* args[],int* infile,int* outfile){
   }
   return flag_in || flag_out;
 }
-
 
 static int path_init(char*** head_path){
   char s[] = "/home/workspace/.vscode-server/bin/6f17636121051a53c88d3e605c491d22af2ba755/bin/remote-cli:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/home/workspace/.bin:/home/workspace/.cargo/bin:/home/workspace/.bin:/home/workspace/.cargo/bin";
@@ -272,6 +269,9 @@ int main(unused int argc, unused char* argv[]) {
   if (shell_is_interactive)
     fprintf(stdout, "%d: ", line_num);
 
+
+  
+
   while (fgets(line, 4096, stdin)) {
     /* Split our line into words. */
     struct tokens* tokens = tokenize(line);
@@ -280,9 +280,10 @@ int main(unused int argc, unused char* argv[]) {
     int fundex = lookup(tokens_get_token(tokens, 0));
 
     if (fundex >= 0) {
+      /* shell内置命令 */
       cmd_table[fundex].fun(tokens);
     } else {
-      /* REPLACE this to run commands as programs. */
+      /* run commands as programs. */
       int cpid = fork();
       if(cpid > 0){//parent process
         /*如果不wait，二者会同时读取命令*/
@@ -293,6 +294,39 @@ int main(unused int argc, unused char* argv[]) {
         fprintf(stdout,"fork failed\n");
       }
     }
+
+    struct pipe_fds{
+    int fds[2];
+  };
+  int pipe_num = 10;
+  struct pipe_fds pipe_arr[pipe_num - 1];
+
+  for(int i = 0; i < pipe_num - 1; i++){
+    pipe(pipe_arr[i].fds);
+  }
+
+  for(int i = 0; i < pipe_num; i++){
+    int cpid = fork();//pipe由于fork被share了
+    if(cpid >0){
+      /* shell进程不使用管道 */
+      for (int j = 0; j < pipe_num - 1; j++) {
+        close(pipe_arr[j].fds[PIPE_READ_SIDE]);
+        close(pipe_arr[j].fds[PIPE_WRITE_SIDE]);
+      }
+    }else if(cpid == 0){//child
+      if(i > 0){
+        dup2(pipe_arr[i-1].fds[PIPE_READ_SIDE],STDIN_FILENO);
+      }
+      if(i < pipe_num - 1){
+        dup2(pipe_arr[i].fds[PIPE_WRITE_SIDE],STDOUT_FILENO);
+      }
+      /* close all */
+      for (int j = 0; j < pipe_num - 1; j++) {
+        close(pipe_arr[j].fds[PIPE_READ_SIDE]);
+        close(pipe_arr[j].fds[PIPE_WRITE_SIDE]);
+      }
+    }
+  }
     if (shell_is_interactive)
       /* Please only print shell prompts when standard input is not a tty */
       fprintf(stdout, "%d: ", ++line_num);
