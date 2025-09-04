@@ -2,6 +2,11 @@
     "files.associations": {
         "list.h": "c",
         "stddef.h": "c",
-        "compare": "c"
+        "compare": "c",
+        "lib.h": "c",
+        "loader.h": "c",
+        "gdt.h": "c",
+        "termios.h": "c",
+        "memory_resource": "c"
     }
 }

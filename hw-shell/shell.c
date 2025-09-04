@@ -38,7 +38,7 @@ static int path_init(char*** head_path);
 bool is_full_path(char* path);
 void complete_and_run(struct tokens* tokens);
 bool check_stdio(int cmd_num,char* args[],FILE** infile,FILE** outfile);
-
+void args_no_redirect(char* old_args[],char* new_args[],int cmd_num);
 /* Built-in command functions take token array (see parse.h) and return int */
 typedef int cmd_fun_t(struct tokens* tokens);
 
@@ -122,16 +122,12 @@ char* cat_fullpath(char* usrpath,int idx,char*** head_path,char* full_path){
   strcat(full_path,(*head_path)[idx]);
   strcat(full_path,"/");
   strcat(full_path,usrpath);
-  // printf("full_path cated: %s\n",full_path);
   return full_path;
 }
-// void build_args(struct tokens* tokens){
 
-// }
 void complete_and_run(struct tokens* tokens){
   int cmd_num = tokens_get_length(tokens);
   char* args[cmd_num + 1];
-  // args = malloc(sizeof(char**));
   for(int i = 0; i < cmd_num + 1; i++){
     args[i] = malloc(sizeof(char*));
   }
@@ -143,44 +139,72 @@ void complete_and_run(struct tokens* tokens){
 
   /* 输入输出重定向*/
   FILE *infile = NULL, *outfile = NULL;
-  if(check_stdio(cmd_num,args,&infile,&outfile) == true){
+  bool is_redirect = check_stdio(cmd_num,args,&infile,&outfile);
+  char* new_args[cmd_num];
+
+  if(is_redirect == true){
     if(infile != NULL){
       dup2(fileno(infile),STDIN_FILENO);
+      // printf("infile changed\n");
     }
     if(outfile != NULL){
       dup2(fileno(outfile),STDOUT_FILENO);
+      // printf("outfile changed\n");
     }
     if((outfile == NULL) && (infile == NULL)){
       perror("no file!\n");
     }
     fclose(infile);
     fclose(outfile);
+
+    args_no_redirect(args,new_args,cmd_num);
   }
 
   // /* 打印args*/
-  for(int i=0;i<sizeof(args);i++){
-          printf("args=%s\n",args[i]);
-  }
+  // for(int i=0;i<sizeof(new_args);i++){
+  //         printf("args=%s\n",new_args[i]);
+  // }
 
   char* path = tokens_get_token(tokens,0);
 
   /*对于没有补全的path做拼接处理*/
   if(is_full_path(path) == false){//不是全路径
-    // printf("uncomplete: %s\n",path);
     char** head_paths = NULL;
     int num_of_paths = path_init(&head_paths);
-    for(int i=0;i<num_of_paths;i++){
-      printf("%s\n",head_paths[i]);
-    }
+    // for(int i=0;i<num_of_paths;i++){
+    //   printf("%s\n",head_paths[i]);
+    // }
     char* full_path = malloc(sizeof(char)*100);
     for(int i = 0; i < num_of_paths; i++){
       cat_fullpath(path,i,&head_paths,full_path);
-      execv(full_path,args);
+      if(is_redirect){
+        execv(full_path,new_args);
+      }else{
+        execv(full_path,args);
+      }
     }
   }else{
-    execv(path,args);
+    if(is_redirect){
+      execv(path,new_args);
+    }else{
+      execv(path,args);
+    }
   }  
   perror("execv failed\n");
+}
+
+void args_no_redirect(char* old_args[],char* new_args[],int cmd_num){
+  int i = 0, j = 0;
+  while(i < cmd_num){// i = cmd_num是null
+    if((strcmp(old_args[i],"<") == 0) || (strcmp(old_args[i],">") == 0)){
+      i+=2;
+    }else{
+      new_args[j] = old_args[i];
+      i++;
+      j++;
+    }
+  }
+  new_args[j] = NULL;
 }
 
 bool check_stdio(int cmd_num,char* args[],FILE** infile,FILE** outfile){
@@ -191,6 +215,9 @@ bool check_stdio(int cmd_num,char* args[],FILE** infile,FILE** outfile){
     if(strcmp(args[i],"<") == 0){
       *infile = fopen(args[i+1],"r");
       i++;
+      if(*infile == NULL){
+        perror("can't find infile\n");
+      }
       flag_in = true;
     }else if(strcmp(args[i],">") == 0){
       *outfile = fopen(args[i+1],"w");
@@ -199,8 +226,7 @@ bool check_stdio(int cmd_num,char* args[],FILE** infile,FILE** outfile){
     }
     if(flag_in && flag_out)return true;
   }
-  if(flag_in || flag_out)return true;
-  return false;
+  return flag_in || flag_out;
 }
 
 
@@ -216,7 +242,6 @@ static int path_init(char*** head_path){
   { 
     (*head_path)[num_of_paths] = malloc(sizeof(char*)*(strlen(token)+1));
     strcpy((*head_path)[num_of_paths],token);
-    // printf ("'%s'\n", (*head_path)[num_of_paths]);
     num_of_paths++;
   }
   return num_of_paths;
@@ -260,7 +285,7 @@ int main(unused int argc, unused char* argv[]) {
       }else if(cpid == 0){//child
         complete_and_run(tokens);
       }else{
-        printf("fork failed\n");
+        fprintf(stdout,"fork failed\n");
       }
     }
     if (shell_is_interactive)
