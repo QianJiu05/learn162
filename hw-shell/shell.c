@@ -37,7 +37,7 @@ char* cat_fullpath(char* usrpath,int idx,char*** head_path,char* full_path);
 static int path_init(char*** head_path);
 bool is_full_path(char* path);
 void complete_and_run(struct tokens* tokens);
-bool check_stdio(int cmd_num,char* args[],FILE** infile,FILE** outfile);
+bool check_stdio(int cmd_num,char* args[],int* infile,int* outfile);
 void args_no_redirect(char* old_args[],char* new_args[],int cmd_num);
 /* Built-in command functions take token array (see parse.h) and return int */
 typedef int cmd_fun_t(struct tokens* tokens);
@@ -138,24 +138,29 @@ void complete_and_run(struct tokens* tokens){
   args[cmd_num] = NULL;
 
   /* 输入输出重定向*/
-  FILE *infile = NULL, *outfile = NULL;
+  // FILE *infile = NULL, *outfile = NULL;
+  int infile = -1, outfile = -1;
   bool is_redirect = check_stdio(cmd_num,args,&infile,&outfile);
   char* new_args[cmd_num];
 
   if(is_redirect == true){
-    if(infile != NULL){
-      dup2(fileno(infile),STDIN_FILENO);
+    if(infile != -1){
+      // dup2(fileno(infile),STDIN_FILENO);
+      dup2(infile,STDIN_FILENO);
       // printf("infile changed\n");
     }
-    if(outfile != NULL){
-      dup2(fileno(outfile),STDOUT_FILENO);
+    if(outfile != -1){
+      // dup2(fileno(outfile),STDOUT_FILENO);
+      dup2(outfile,STDOUT_FILENO);
       // printf("outfile changed\n");
     }
-    if((outfile == NULL) && (infile == NULL)){
+    if((outfile == -1) && (infile == -1)){
       perror("no file!\n");
     }
-    fclose(infile);
-    fclose(outfile);
+    close(infile);
+    close(outfile);
+    // fclose(infile);
+    // fclose(outfile);
 
     args_no_redirect(args,new_args,cmd_num);
   }
@@ -207,20 +212,20 @@ void args_no_redirect(char* old_args[],char* new_args[],int cmd_num){
   new_args[j] = NULL;
 }
 
-bool check_stdio(int cmd_num,char* args[],FILE** infile,FILE** outfile){
+bool check_stdio(int cmd_num,char* args[],int* infile,int* outfile){
   /* i应该小于cmdnum - 1，因为cmdnum位置是NULL
   *  cmdnum-1是最后一个参数，不能是 < or >   */
   bool flag_in = false, flag_out = false;
   for(int i = 1; i < cmd_num - 1; i++){
     if(strcmp(args[i],"<") == 0){
-      *infile = fopen(args[i+1],"r");
+      *infile = open(args[i+1],O_RDONLY);
       i++;
-      if(*infile == NULL){
+      if(*infile == -1){
         perror("can't find infile\n");
       }
       flag_in = true;
     }else if(strcmp(args[i],">") == 0){
-      *outfile = fopen(args[i+1],"w");
+      *outfile = open(args[i+1],O_WRONLY | O_CREAT | O_TRUNC, 0644);
       i++;
       flag_out = true;
     }
