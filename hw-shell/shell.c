@@ -39,6 +39,7 @@ int cmd_cd(struct tokens* tokens);
 char* cat_fullpath(char* usrpath,int idx,char*** head_path,char* full_path);
 static int path_init(char*** head_path);
 bool is_full_path(char* path);
+void init_args(char** args, int cmd_num, struct tokens* tokens);
 void complete_and_run(struct tokens* tokens);
 bool check_stdio(int cmd_num,char* args[],int* infile,int* outfile);
 void get_redirect_args(char* old_args[],char* new_args[],int cmd_num);
@@ -72,7 +73,7 @@ int cmd_exit(unused struct tokens* tokens) { exit(0); }
 int cmd_pwd(unused struct tokens* tokens) {
   char path[4096];
   getcwd(path,sizeof(path));
-  printf("path = %s\n",path);
+  printf("%s\n",path);
   return 1;
 }
 
@@ -112,14 +113,14 @@ void init_shell() {
     /* Saves the shell's process id */
     shell_pgid = getpid();
 
-    /* Take control of the terminal */
+    /* Take control of the terminal
+        pgrp是进程组         */
     tcsetpgrp(shell_terminal, shell_pgid);
 
     /* Save the current termios to a variable, so it can be restored later. */
     tcgetattr(shell_terminal, &shell_tmodes);
   }
 }
-
 char* cat_fullpath(char* usrpath,int idx,char*** head_path,char* full_path){
   memset(full_path,'\0',strlen(full_path));
   strcat(full_path,(*head_path)[idx]);
@@ -128,20 +129,29 @@ char* cat_fullpath(char* usrpath,int idx,char*** head_path,char* full_path){
   return full_path;
 }
 
-void complete_and_run(struct tokens* tokens){
-  int cmd_num = tokens_get_length(tokens);
-  char* args[cmd_num + 1];
+void init_args(char** args, int cmd_num, struct tokens* tokens){
+
   for(int i = 0; i < cmd_num + 1; i++){
     args[i] = malloc(sizeof(char*));
   }
-
   for(int i = 0; i < cmd_num; i++){
     args[i] = tokens_get_token(tokens,i);
   }
   args[cmd_num] = NULL;
 
+  for(int i = 0; i < cmd_num + 1; i++){
+    printf("init args: %s\n",args[i]);
+  }
+
+}
+void complete_and_run(struct tokens* tokens){
+  int cmd_num = tokens_get_length(tokens);
+  
+  /*初始化args指针数组*/
+  char* args[cmd_num + 1];
+  init_args(args,cmd_num,tokens);
+
   /* 输入输出重定向*/
-  // FILE *infile = NULL, *outfile = NULL;
   int infile = -1, outfile = -1;
   bool is_redirect = check_stdio(cmd_num,args,&infile,&outfile);
   char* new_args[cmd_num];
@@ -159,7 +169,6 @@ void complete_and_run(struct tokens* tokens){
     close(infile);
     close(outfile);
 
-
     get_redirect_args(args,new_args,cmd_num);
   }
 
@@ -174,19 +183,18 @@ void complete_and_run(struct tokens* tokens){
   if(is_full_path(path) == false){//不是全路径
     char** head_paths = NULL;
     int num_of_paths = path_init(&head_paths);
-    // for(int i=0;i<num_of_paths;i++){
-    //   printf("%s\n",head_paths[i]);
-    // }
     char* full_path = malloc(sizeof(char)*100);
+
     for(int i = 0; i < num_of_paths; i++){
       cat_fullpath(path,i,&head_paths,full_path);
-      if(is_redirect){
+      if(is_redirect){//重定向输入输出了
         execv(full_path,new_args);
       }else{
         execv(full_path,args);
       }
     }
-  }else{
+
+  }else{//全路径
     if(is_redirect){
       execv(path,new_args);
     }else{
@@ -287,46 +295,53 @@ int main(unused int argc, unused char* argv[]) {
       int cpid = fork();
       if(cpid > 0){//parent process
         /*如果不wait，二者会同时读取命令*/
+        
         waitpid(cpid,NULL,0);
+        // int parpid = getpgrp();
+        // fprintf(stdout,"parpid = %d\n",parpid);
       }else if(cpid == 0){//child
+        int childgrp = getpgrp();
+        // fprintf(stdout,"childpid = %d\n",childpid);
+        tcsetpgrp(STDOUT_FILENO, childgrp);
         complete_and_run(tokens);
       }else{
         fprintf(stdout,"fork failed\n");
       }
     }
 
-    struct pipe_fds{
-    int fds[2];
-  };
-  int pipe_num = 10;
-  struct pipe_fds pipe_arr[pipe_num - 1];
+  // struct pipe_fds{
+  //   int fds[2];
+  // };
+  // int pipe_num = 10;
+  // struct pipe_fds pipe_arr[pipe_num - 1];
 
-  for(int i = 0; i < pipe_num - 1; i++){
-    pipe(pipe_arr[i].fds);
-  }
+  // for(int i = 0; i < pipe_num - 1; i++){
+  //   pipe(pipe_arr[i].fds);
+  // }
 
-  for(int i = 0; i < pipe_num; i++){
-    int cpid = fork();//pipe由于fork被share了
-    if(cpid >0){
-      /* shell进程不使用管道 */
-      for (int j = 0; j < pipe_num - 1; j++) {
-        close(pipe_arr[j].fds[PIPE_READ_SIDE]);
-        close(pipe_arr[j].fds[PIPE_WRITE_SIDE]);
-      }
-    }else if(cpid == 0){//child
-      if(i > 0){
-        dup2(pipe_arr[i-1].fds[PIPE_READ_SIDE],STDIN_FILENO);
-      }
-      if(i < pipe_num - 1){
-        dup2(pipe_arr[i].fds[PIPE_WRITE_SIDE],STDOUT_FILENO);
-      }
-      /* close all */
-      for (int j = 0; j < pipe_num - 1; j++) {
-        close(pipe_arr[j].fds[PIPE_READ_SIDE]);
-        close(pipe_arr[j].fds[PIPE_WRITE_SIDE]);
-      }
-    }
-  }
+  // for(int i = 0; i < pipe_num; i++){
+  //   int cpid = fork();//pipe由于fork被share了
+  //   if(cpid >0){
+  //     /* shell进程不使用管道 */
+  //     for (int j = 0; j < pipe_num - 1; j++) {
+  //       close(pipe_arr[j].fds[PIPE_READ_SIDE]);
+  //       close(pipe_arr[j].fds[PIPE_WRITE_SIDE]);
+  //     }
+  //   }else if(cpid == 0){//child
+  //     if(i > 0){
+  //       dup2(pipe_arr[i-1].fds[PIPE_READ_SIDE],STDIN_FILENO);
+  //     }
+  //     if(i < pipe_num - 1){
+  //       dup2(pipe_arr[i].fds[PIPE_WRITE_SIDE],STDOUT_FILENO);
+  //     }
+  //     /* close all */
+  //     for (int j = 0; j < pipe_num - 1; j++) {
+  //       close(pipe_arr[j].fds[PIPE_READ_SIDE]);
+  //       close(pipe_arr[j].fds[PIPE_WRITE_SIDE]);
+  //     }
+  //   }
+  // }
+
     if (shell_is_interactive)
       /* Please only print shell prompts when standard input is not a tty */
       fprintf(stdout, "%d: ", ++line_num);
