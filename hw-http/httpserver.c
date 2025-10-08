@@ -34,16 +34,37 @@ int server_proxy_port;
 /*
  * Serves the contents the file stored at `path` to the client socket `fd`.
  * It is the caller's reponsibility to ensure that the file stored at `path` exists.
+ * 
+ * 将存储在 `path` 中的文件内容提供给客户端套接字 `fd`。调用者有责任确保存储在 `path` 中的文件存在。
  */
 void serve_file(int fd, char* path) {
 
   /* TODO: PART 2 */
   /* PART 2 BEGIN */
+  FILE* file = fopen(path,"rb");
+
+  fseek(file, 0, SEEK_END);  // 移动到文件末尾
+  long _fileSize = ftell(file);  // 获取文件大小
+  char fileSize[32];
+  snprintf(fileSize,sizeof(fileSize),"%ld",_fileSize);
+
+  fseek(file, 0, SEEK_SET);  // 移动到文件开头
 
   http_start_response(fd, 200);
   http_send_header(fd, "Content-Type", http_get_mime_type(path));
-  http_send_header(fd, "Content-Length", "0"); // TODO: change this line too
+  http_send_header(fd, "Content-Length", fileSize);//%s,%s格式的
   http_end_headers(fd);
+
+  char buffer[1000];
+  int byte_read;
+  while(byte_read = fread(buffer,sizeof(char),1000,file) >0){
+    if(write(fd, buffer,byte_read)<0){//发送失败了
+      break;
+    }
+  }
+
+  fclose(file);
+
 
   /* PART 2 END */
 }
@@ -58,11 +79,37 @@ void serve_directory(int fd, char* path) {
 
   // TODO: Open the directory (Hint: opendir() may be useful here)
 
+  // DIR *dir_ptr;
+	// struct dirent *direntp;
+	// dir_ptr = opendir(dirname);
+  // direntp = readdir(dir_ptr);
+	// 	while(direntp == NULL)
+	// 	{
+	// 		printf("%s\n",direntp->d_name);
+	// 	}
+	// 	closedir(dir_ptr);
+
+
+  DIR* dir = opendir(path);
+
+  if(dir == NULL){
+
+
+
+  }
+
   /**
    * TODO: For each entry in the directory (Hint: look at the usage of readdir() ),
    * send a string containing a properly formatted HTML. (Hint: the http_format_href()
    * function in libhttp.c may be useful here)
+   * 
+   * 对于目录中的每个条目（提示：查看 readdir() 的用法），
+   * 发送一个包含正确格式的 HTML 的字符串。
+   * （提示：libhttp.c 中的 http_format_href()函数可能有用）
    */
+  struct dirent *direntp;
+
+
 
   /* PART 3 END */
 }
@@ -79,6 +126,12 @@ void serve_directory(int fd, char* path) {
  *   4) Send a 404 Not Found response.
  *
  *   Closes the client socket (fd) when finished.
+ * 
+ *  从客户端套接字 (fd) 读取 HTTP 请求，并写入 HTTP 响应。
+    1) 如果用户请求的文件已存在，则返回该文件。
+    2) 如果用户请求的目录存在 index.html 文件，则发送该 index.html 文件。
+    3) 如果用户请求的目录不存在 index.html 文件，则发送该目录中的文件列表及其链接。
+    4) 发送 404 Not Found 响应。完成后关闭客户端套接字 (fd)。
  */
 void handle_files_request(int fd) {
 
@@ -110,13 +163,41 @@ void handle_files_request(int fd) {
    * TODO: PART 2 is to serve files. If the file given by `path` exists,
    * call serve_file() on it. Else, serve a 404 Not Found error below.
    * The `stat()` syscall will be useful here.
+   * 
+   * 第二部分是提供文件服务。如果 `path` 指定的文件存在，则调用 serve_file() 函数。
+   * 否则，返回下面的 404 Not Found 错误。
+   * `stat()` 系统调用在这里会很有用。
    *
    * TODO: PART 3 is to serve both files and directories. You will need to
    * determine when to call serve_file() or serve_directory() depending
    * on `path`. Make your edits below here in this function.
+   * 
+   * 第 3 部分是同时提供文件和目录服务。
+   * 您需要根据 `path` 确定何时调用 serve_file() 或 serve_directory()。
+   * 请在此函数中进行以下编辑。
    */
 
   /* PART 2 & 3 BEGIN */
+  struct stat file_assert;
+  if(stat(path,&file_assert) == 0){//文件存在
+
+    if(S_ISREG(file_assert.st_mode)){//普通文件
+      serve_file(fd,path);
+    }else if(S_ISDIR(file_assert.st_mode)){//目录
+      serve_directory(fd,path);
+    }else{//不存在
+
+      http_start_response(fd, 404);
+      http_send_header(fd, "Content-Type","text/html");
+      http_end_headers(fd);
+
+    }
+
+  }
+  
+
+
+
 
   /* PART 2 & 3 END */
 
@@ -226,6 +307,9 @@ void init_thread_pool(int num_threads, void (*request_handler)(int)) {
  * Opens a TCP stream socket on all interfaces with port number PORTNO. Saves
  * the fd number of the server socket in *socket_number. For each accepted
  * connection, calls request_handler with the accepted fd number.
+ * 
+ * 在所有端口号为 PORTNO 的接口上打开一个 TCP 流套接字。将服务器套接字的 fd 号保存在 *socket_number 中。
+ * 对于每个已接受的连接，使用已接受的 fd 号调用 request_handler。
  */
 void serve_forever(int* socket_number, void (*request_handler)(int)) {
 
@@ -260,9 +344,25 @@ void serve_forever(int* socket_number, void (*request_handler)(int)) {
    * an address and a port. Then, call listen() with the socket.
    * An appropriate size of the backlog is 1024, though you may
    * play around with this value during performance testing.
+   * 
+   * 给定上面创建的套接字，调用 bind() 为其指定地址和端口。然后，使用该套接字调用 listen()。
+   * 合适的 backlog 大小为 1024，不过您可以在性能测试期间调整此值。
    */
 
   /* PART 1 BEGIN */
+  int backlog = 1024;
+  // bind(*socket_number,&server_address,sizeof(server_address));
+  if (bind(*socket_number,&server_address, sizeof(server_address)) < 0) {
+    perror("Failed to bind socket");
+    exit(errno);
+  }
+
+  if (listen(*socket_number,backlog) == -1){//只需要一次listen即可永远accept？
+    perror("failed to listen");
+    exit(errno);
+  }
+
+
 
   /* PART 1 END */
   printf("Listening on port %d...\n", server_port);
