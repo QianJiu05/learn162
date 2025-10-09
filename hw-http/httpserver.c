@@ -18,7 +18,8 @@
 #include "libhttp.h"
 #include "wq.h"
 
-#define BUFFER_LENGTH 1024
+#define READ_BUFFER 1024
+#define CHILD_NUM 100
 /*
  * Global configuration variables.
  * You need to use these in your implementation of handle_files_request and
@@ -55,9 +56,9 @@ void serve_file(int fd, char* path) {
   http_send_header(fd, "Content-Length", fileSize);//%s,%s格式的
   http_end_headers(fd);
 
-  char buffer[BUFFER_LENGTH];
+  char buffer[READ_BUFFER];
   ssize_t byte_read;
-  while((byte_read = read(file_fd,buffer,BUFFER_LENGTH)) > 0){//-1 Err, 0 EOF, >0 num read
+  while((byte_read = read(file_fd,buffer,READ_BUFFER)) > 0){//-1 Err, 0 EOF, >0 num read
     if(write(fd, buffer,byte_read) < 0){//发送失败了
       break;
     }
@@ -91,7 +92,7 @@ void serve_directory(int fd, char* path) {
    * （提示：libhttp.c 中的 http_format_href()函数可能有用）
    */
   struct dirent *entry;
-  char child[100][256];//这里用一个数组存储文件，直接申请一个大的，省的去变长
+  char child[CHILD_NUM][256];//这里用一个数组存储文件，直接申请一个大的，省的去变长
   // struct stat file_stat;
   int child_idx = 0;
   while((entry = readdir(dir)) != NULL){//访问该目录下所有文件
@@ -113,7 +114,7 @@ void serve_directory(int fd, char* path) {
       return;
     }
 
-    if(child_idx < 100){
+    if(child_idx < CHILD_NUM){
       fprintf(stdout,"see name = %s",entry->d_name);
       //把目录的子内容在format处理过后存入child
       http_format_href(child[child_idx],path,entry->d_name);
@@ -235,6 +236,15 @@ void handle_files_request(int fd) {
  *   +--------+     +------------+     +--------------+
  *
  *   Closes client socket (fd) and proxy target fd (target_fd) when finished.
+ * 
+ *  打开与代理目标 (hostname=server_proxy_hostname 和
+ *  port=server_proxy_port) 的连接，并将流量中继到/来自流 fd 和
+ *  代理 target_fd。来自客户端 (fd) 的 HTTP 请求应发送到
+ *  代理目标 (target_fd)，来自代理目标 (target_fd) 的 HTTP 响应应发送到
+ *  客户端 (fd)。
+ * 
+ *  完成后关闭客户端套接字（fd）和代理目标 fd（target_fd）。
+ * 
  */
 void handle_proxy_request(int fd) {
 
@@ -286,6 +296,7 @@ void handle_proxy_request(int fd) {
 
   /* TODO: PART 4 */
   /* PART 4 BEGIN */
+  // dup2() 只是复制文件描述符，让两个描述符指向同一个文件/socket，但不会在它们之间传输数据。应该用select或者创建线程监听socket
 
   /* PART 4 END */
 }
