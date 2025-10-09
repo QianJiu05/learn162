@@ -57,7 +57,7 @@ void serve_file(int fd, char* path) {
 
   char buffer[BUFFER_LENGTH];
   ssize_t byte_read;
-  while((byte_read = (fd,buffer,BUFFER_LENGTH)) > 0){//-1 Err, 0 EOF, >0 num read
+  while((byte_read = read(file_fd,buffer,BUFFER_LENGTH)) > 0){//-1 Err, 0 EOF, >0 num read
     if(write(fd, buffer,byte_read) < 0){//发送失败了
       break;
     }
@@ -76,7 +76,6 @@ void serve_directory(int fd, char* path) {
   /* PART 3 BEGIN */
 
   // TODO: Open the directory (Hint: opendir() may be useful here)
-
   DIR* dir = opendir(path);
   if(dir == NULL){
     perror("failed open dir!");
@@ -92,16 +91,45 @@ void serve_directory(int fd, char* path) {
    * （提示：libhttp.c 中的 http_format_href()函数可能有用）
    */
   struct dirent *entry;
+  char child[100][256];//这里用一个数组存储文件，直接申请一个大的，省的去变长
+  // struct stat file_stat;
+  int child_idx = 0;
   while((entry = readdir(dir)) != NULL){//访问该目录下所有文件
+    
+    // 跳过 . 和 .. 目录
+    if(strcmp(".", entry->d_name) == 0 || strcmp("..", entry->d_name) == 0){
+      continue;
+    }
 
+    if(strcmp("index.html",entry->d_name) == 0){
+    /*If the directory contains an index.html file, respond with a 200 OK 
+    and the full contents of the index.html file. You may not assume that 
+    directory requests will have a trailing slash in the query string.
+    The http_format_index function in libhttp.c may be useful.*/
+      char index_path[100];
+      http_format_index(index_path,path);
+      serve_file(fd,index_path);
+      closedir(dir);
+      return;
+    }
+
+    if(child_idx < 100){
+      fprintf(stdout,"see name = %s",entry->d_name);
+      //把目录的子内容在format处理过后存入child
+      http_format_href(child[child_idx],path,entry->d_name);
+      child_idx++;
+    }else{
+      break;
+    }
 
   }
-
+  for(int i = 0; i < child_idx; i++){
+    write(fd,child[i],strlen(child[i]));
+  }
+  
+  
 
   closedir(dir);
-
-
-
 
   /* PART 3 END */
 }
@@ -182,15 +210,13 @@ void handle_files_request(int fd) {
   }else{//不存在
 
     http_start_response(fd, 404);
-    http_send_header(fd, "Content-Type","text/html");
+    http_send_header(fd, "Content-Type","text/plain");
+
+    // http_send_header(fd, "Content-Type","text/html");
     http_end_headers(fd);
 
-    }
+  }
   
-
-
-
-
   /* PART 2 & 3 END */
 
   close(fd);
