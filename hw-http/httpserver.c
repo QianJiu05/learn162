@@ -18,6 +18,7 @@
 #include "libhttp.h"
 #include "wq.h"
 
+#define BUFFER_LENGTH 1024
 /*
  * Global configuration variables.
  * You need to use these in your implementation of handle_files_request and
@@ -41,31 +42,28 @@ void serve_file(int fd, char* path) {
 
   /* TODO: PART 2 */
   /* PART 2 BEGIN */
-  FILE* file = fopen(path,"rb");
-
-  fseek(file, 0, SEEK_END);  // 移动到文件末尾
-  long _fileSize = ftell(file);  // 获取文件大小
+  // FILE* file = fopen(path,"rb");
+  int file_fd = open(path,O_RDONLY);//直接打开就行，在外面已经检测过存在了
+  
+  off_t _fileSize = lseek(file_fd,0,SEEK_END);
+  lseek(file_fd,0,SEEK_SET);
   char fileSize[32];
   snprintf(fileSize,sizeof(fileSize),"%ld",_fileSize);
-
-  fseek(file, 0, SEEK_SET);  // 移动到文件开头
 
   http_start_response(fd, 200);
   http_send_header(fd, "Content-Type", http_get_mime_type(path));
   http_send_header(fd, "Content-Length", fileSize);//%s,%s格式的
   http_end_headers(fd);
 
-  char buffer[1000];
-  int byte_read;
-  while(byte_read = fread(buffer,sizeof(char),1000,file) >0){
-    if(write(fd, buffer,byte_read)<0){//发送失败了
+  char buffer[BUFFER_LENGTH];
+  ssize_t byte_read;
+  while((byte_read = (fd,buffer,BUFFER_LENGTH)) > 0){//-1 Err, 0 EOF, >0 num read
+    if(write(fd, buffer,byte_read) < 0){//发送失败了
       break;
     }
   }
 
-  fclose(file);
-
-
+  close(file_fd);
   /* PART 2 END */
 }
 
@@ -79,23 +77,9 @@ void serve_directory(int fd, char* path) {
 
   // TODO: Open the directory (Hint: opendir() may be useful here)
 
-  // DIR *dir_ptr;
-	// struct dirent *direntp;
-	// dir_ptr = opendir(dirname);
-  // direntp = readdir(dir_ptr);
-	// 	while(direntp == NULL)
-	// 	{
-	// 		printf("%s\n",direntp->d_name);
-	// 	}
-	// 	closedir(dir_ptr);
-
-
   DIR* dir = opendir(path);
-
   if(dir == NULL){
-
-
-
+    perror("failed open dir!");
   }
 
   /**
@@ -107,7 +91,15 @@ void serve_directory(int fd, char* path) {
    * 发送一个包含正确格式的 HTML 的字符串。
    * （提示：libhttp.c 中的 http_format_href()函数可能有用）
    */
-  struct dirent *direntp;
+  struct dirent *entry;
+  while((entry = readdir(dir)) != NULL){//访问该目录下所有文件
+
+
+  }
+
+
+  closedir(dir);
+
 
 
 
@@ -185,15 +177,15 @@ void handle_files_request(int fd) {
       serve_file(fd,path);
     }else if(S_ISDIR(file_assert.st_mode)){//目录
       serve_directory(fd,path);
-    }else{//不存在
-
-      http_start_response(fd, 404);
-      http_send_header(fd, "Content-Type","text/html");
-      http_end_headers(fd);
-
     }
 
-  }
+  }else{//不存在
+
+    http_start_response(fd, 404);
+    http_send_header(fd, "Content-Type","text/html");
+    http_end_headers(fd);
+
+    }
   
 
 
