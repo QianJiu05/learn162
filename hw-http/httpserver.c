@@ -20,6 +20,11 @@
 
 #define READ_BUFFER 1024
 #define CHILD_NUM 100
+
+struct double_end_fd{
+  int fd;
+  int target_fd;
+};
 /*
  * Global configuration variables.
  * You need to use these in your implementation of handle_files_request and
@@ -32,6 +37,9 @@ int server_port; // Default value: 8000
 char* server_files_directory;
 char* server_proxy_hostname;
 int server_proxy_port;
+
+void* listen_func(struct double_end_fd *fds);
+void* back_func(struct double_end_fd *fds);
 
 /*
  * Serves the contents the file stored at `path` to the client socket `fd`.
@@ -242,7 +250,6 @@ void handle_files_request(int fd) {
  *  代理 target_fd。来自客户端 (fd) 的 HTTP 请求应发送到
  *  代理目标 (target_fd)，来自代理目标 (target_fd) 的 HTTP 响应应发送到
  *  客户端 (fd)。
- * 
  *  完成后关闭客户端套接字（fd）和代理目标 fd（target_fd）。
  * 
  */
@@ -296,11 +303,53 @@ void handle_proxy_request(int fd) {
 
   /* TODO: PART 4 */
   /* PART 4 BEGIN */
-  // dup2() 只是复制文件描述符，让两个描述符指向同一个文件/socket，但不会在它们之间传输数据。应该用select或者创建线程监听socket
+  // dup2() 只是复制文件描述符，让两个描述符指向同一个文件/socket，但不会在它们之间传输数据。
+  //select或者创建线程监听socket,题目要求pthread
+  pthread_t listen, back; 
+  struct double_end_fd fds = {fd,target_fd};
+  pthread_create(&listen,NULL,listen_func,&fds);//创建监听线程，转发给target
+  pthread_create(&back,NULL,back_func,&fds);//把target的内容转发回client
+
+  pthread_join(listen, NULL);
+  pthread_join(back, NULL);
+
+  close(fd);
+  close(target_fd);
 
   /* PART 4 END */
 }
+//fd -> target_fd
+void* listen_func(struct double_end_fd *fds){
+  int fd = fds->fd;
+  int target_fd = fds->target_fd;
+  char buffer[READ_BUFFER];
+  ssize_t read_byte;
 
+  while( (read_byte = read(fd,buffer,sizeof(buffer))) > 0){
+    if(write(target_fd,buffer,read_byte) <= 0){
+      //write = 0： 连接可能关闭； = 1： 写入错误
+      break;
+    }
+  }
+
+  return NULL;
+}
+//target_fd -> fd
+void* back_func(struct double_end_fd *fds){
+  int fd = fds->fd;
+  int target_fd = fds->target_fd;
+  char buffer[READ_BUFFER];
+  ssize_t read_byte;
+
+  while( (read_byte = read(target_fd,buffer,sizeof(buffer))) > 0){
+    //
+    if(write(fd,buffer,read_byte) <= 0){
+      break;
+    }
+  }
+
+  return NULL;
+}
 #ifdef POOLSERVER
 /*
  * All worker threads will run this function until the server shutsdown.
