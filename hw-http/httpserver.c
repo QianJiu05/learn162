@@ -20,6 +20,7 @@
 
 #define READ_BUFFER 1024
 #define CHILD_NUM 100
+#define backlog 1024
 
 struct double_end_fd{
   int fd;
@@ -428,7 +429,7 @@ void serve_forever(int* socket_number, void (*request_handler)(int)) {
    */
 
   /* PART 1 BEGIN */
-  int backlog = 1024;
+  // int backlog = 1024;
   // bind(*socket_number,&server_address,sizeof(server_address));
   if (bind(*socket_number,&server_address, sizeof(server_address)) < 0) {
     perror("Failed to bind socket");
@@ -444,7 +445,6 @@ void serve_forever(int* socket_number, void (*request_handler)(int)) {
 
   /* PART 1 END */
   printf("Listening on port %d...\n", server_port);
-
 #ifdef POOLSERVER
   /*
    * The thread pool is initialized *before* the server
@@ -485,10 +485,24 @@ void serve_forever(int* socket_number, void (*request_handler)(int)) {
      * process should exit. During this time, the parent
      * process should continue listening and accepting
      * connections.
+     * 
+     * 当客户端连接被接受后，会生成一个新的进程。
+     * 该子进程将向客户端发送响应。
+     * 之后，子进程应该退出。在此期间，父进程应该继续监听并接受连接。
      */
 
     /* PART 5 BEGIN */
-
+    pid_t pid = fork();
+    if(pid == 0){//子进程
+      // handle_files_request(fd);
+      request_handler(client_socket_number);
+      exit(0);
+    }else if(pid > 0){//父进程
+      close(client_socket_number);//关闭客户端
+      
+    }else{
+      perror(fork failed);
+    }
     /* PART 5 END */
 
 #elif THREADSERVER
