@@ -514,9 +514,21 @@ void serve_forever(int* socket_number, void (*request_handler)(int)) {
      * to the client. The main thread should continue
      * listening and accepting connections. The main
      * thread will NOT be joining with the new thread.
+     * 
+     * 当客户端连接被接受后，会创建一个新的线程。
+     * 该线程将向客户端发送响应。
+     * 主线程应继续监听并接受连接。主程不会与新线程合并。
      */
 
     /* PART 6 BEGIN */
+
+    pthread_t tid;
+    if(pthread_create(&tid,NULL,request_handler,(void*)&client_socket_number) != 0){
+      perror(create thread failed);
+      close(client_socket_number);
+      continue;
+    };
+    pthread_detach(tid);//线程运行结束后自动回收资源
 
     /* PART 6 END */
 #elif POOLSERVER
