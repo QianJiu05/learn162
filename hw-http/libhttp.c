@@ -137,6 +137,10 @@ char* http_get_mime_type(char* file_name) {
  * Puts `<a href="/path/filename">filename</a><br/>` into the provided buffer.
  * The resulting string in the buffer is null-terminated. It is the caller's
  * responsibility to ensure that the buffer has enough space for the resulting string.
+ * 
+ * 将 `<a href="/path/filename">filename</a><br/>` 放入提供的缓冲区。
+ * 缓冲区中的结果字符串以空字符结尾。
+ * 调用者有责任确保缓冲区有足够的空间容纳结果字符串。
  */
 void http_format_href(char* buffer, char* path, char* filename) {
   int length = strlen("<a href=\"//\"></a><br/>") + strlen(path) + strlen(filename) * 2 + 1;
@@ -148,6 +152,10 @@ void http_format_href(char* buffer, char* path, char* filename) {
  * The resulting string in the buffer is null-terminated.
  * It is the caller's responsibility to ensure that the
  * buffer has enough space for the resulting string.
+ * 
+ * 将 `path/index.html` 放入提供的缓冲区。
+ * 缓冲区中的结果字符串以空字符结尾。
+ * 调用者有责任确保缓冲区有足够的空间容纳结果字符串。
  */
 void http_format_index(char* buffer, char* path) {
   int length = strlen(path) + strlen("/index.html") + 1;
