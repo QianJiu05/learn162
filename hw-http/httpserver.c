@@ -42,8 +42,6 @@ int server_proxy_port;
 void* listen_func(struct double_end_fd *fds);
 void* back_func(struct double_end_fd *fds);
 
-void* head_func();
-void* body_func();
 
 /*
  * Serves the contents the file stored at `path` to the client socket `fd`.
@@ -139,8 +137,6 @@ void serve_directory(int fd, char* path) {
   for(int i = 0; i < child_idx; i++){
     write(fd,child[i],strlen(child[i]));
   }
-  
-  
 
   closedir(dir);
 
@@ -224,12 +220,10 @@ void handle_files_request(int fd) {
 
     http_start_response(fd, 404);
     http_send_header(fd, "Content-Type","text/plain");
-
     // http_send_header(fd, "Content-Type","text/html");
     http_end_headers(fd);
 
   }
-  
   /* PART 2 & 3 END */
 
   close(fd);
@@ -353,6 +347,16 @@ void* back_func(struct double_end_fd *fds){
 
   return NULL;
 }
+void* thread_request_handler(void* arg){
+  int client_fd = *(int*)arg;
+  if(server_files_directory){//这个字符串不为空，有内容
+    handle_files_request(client_fd);
+  }else{
+    handle_proxy_request(client_fd);
+  }
+  return NULL;
+}
+
 #ifdef POOLSERVER
 /*
  * All worker threads will run this function until the server shutsdown.
@@ -376,12 +380,8 @@ void* handle_clients(void* void_request_handler) {
     request_handler(fd);
     close(fd);//工作线程处理完关闭客户端
   }
-  
-  
-
   /* PART 7 END */
 }
-
 /*
  * Creates `num_threads` amount of threads. Initializes the work queue.
  */
@@ -393,7 +393,7 @@ void init_thread_pool(int num_threads, void (*request_handler)(int)) {
 
   for(int i = 0; i < num_threads; i++){
     pthread_t tid;
-    if (pthread_create(&tid,NULL,handle_clients,request_handler) != 0){
+    if (pthread_create(&tid,NULL,handle_clients,(void*)request_handler) != 0){
       //绑定request handler到handle clients
       perror("thread create failed");
       exit(-1);
@@ -544,9 +544,9 @@ void serve_forever(int* socket_number, void (*request_handler)(int)) {
      */
 
     /* PART 6 BEGIN */
-
     pthread_t tid;
-    if(pthread_create(&tid,NULL,request_handler,(void*)&client_socket_number) != 0){
+    // thread_request_handler
+    if(pthread_create(&tid,NULL,thread_request_handler,(void*)&client_socket_number) != 0){
       perror("create thread failed");
       close(client_socket_number);
       continue;
