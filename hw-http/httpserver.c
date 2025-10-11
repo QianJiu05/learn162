@@ -42,6 +42,9 @@ int server_proxy_port;
 void* listen_func(struct double_end_fd *fds);
 void* back_func(struct double_end_fd *fds);
 
+void* head_func();
+void* body_func();
+
 /*
  * Serves the contents the file stored at `path` to the client socket `fd`.
  * It is the caller's reponsibility to ensure that the file stored at `path` exists.
@@ -343,7 +346,6 @@ void* back_func(struct double_end_fd *fds){
   ssize_t read_byte;
 
   while( (read_byte = read(target_fd,buffer,sizeof(buffer))) > 0){
-    //
     if(write(fd,buffer,read_byte) <= 0){
       break;
     }
@@ -357,6 +359,9 @@ void* back_func(struct double_end_fd *fds){
  * Each thread should block until a new request has been received.
  * When the server accepts a new connection, a thread should be dispatched
  * to send a response to the client.
+ * 
+ * 所有工作线程都将运行此函数，直到服务器关闭。每个线程都应阻塞，直到收到新的请求。
+ * 当服务器接受新的连接时，应调度一个线程向客户端发送响应。
  */
 void* handle_clients(void* void_request_handler) {
   void (*request_handler)(int) = (void (*)(int))void_request_handler;
@@ -366,6 +371,13 @@ void* handle_clients(void* void_request_handler) {
 
   /* TODO: PART 7 */
   /* PART 7 BEGIN */
+  while(1){
+    int fd= wq_pop(&work_queue);
+    request_handler(fd);
+    close(fd);//工作线程处理完关闭客户端
+  }
+  
+  
 
   /* PART 7 END */
 }
@@ -377,7 +389,16 @@ void init_thread_pool(int num_threads, void (*request_handler)(int)) {
 
   /* TODO: PART 7 */
   /* PART 7 BEGIN */
+  wq_init(&work_queue);//wq是全局变量
 
+  for(int i = 0; i < num_threads; i++){
+    pthread_t tid;
+    if (pthread_create(&tid,NULL,handle_clients,request_handler) != 0){
+      //绑定request handler到handle clients
+      perror("thread create failed");
+      exit(-1);
+    }
+  }
   /* PART 7 END */
 }
 #endif
@@ -450,7 +471,9 @@ void serve_forever(int* socket_number, void (*request_handler)(int)) {
    * The thread pool is initialized *before* the server
    * begins accepting client connections.
    */
+
   init_thread_pool(num_threads, request_handler);
+
 #endif
 
   while (1) {
@@ -501,7 +524,7 @@ void serve_forever(int* socket_number, void (*request_handler)(int)) {
       close(client_socket_number);//关闭客户端
       
     }else{
-      perror(fork failed);
+      perror("fork failed");
     }
     /* PART 5 END */
 
@@ -524,7 +547,7 @@ void serve_forever(int* socket_number, void (*request_handler)(int)) {
 
     pthread_t tid;
     if(pthread_create(&tid,NULL,request_handler,(void*)&client_socket_number) != 0){
-      perror(create thread failed);
+      perror("create thread failed");
       close(client_socket_number);
       continue;
     };
@@ -541,6 +564,8 @@ void serve_forever(int* socket_number, void (*request_handler)(int)) {
      */
 
     /* PART 7 BEGIN */
+    wq_push(&work_queue,client_socket_number);
+    
 
     /* PART 7 END */
 #endif
@@ -549,6 +574,7 @@ void serve_forever(int* socket_number, void (*request_handler)(int)) {
   shutdown(*socket_number, SHUT_RDWR);
   close(*socket_number);
 }
+
 
 int server_fd;
 void signal_callback_handler(int signum) {
