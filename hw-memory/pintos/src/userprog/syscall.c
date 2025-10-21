@@ -111,6 +111,12 @@ static void syscall_handler(struct intr_frame* f) {
       syscall_close((int)args[1]);
       break;
 
+    case SYS_SBRK:
+
+      break;
+      
+      
+
     default:
       printf("Unimplemented system call: %d\n", (int)args[0]);
       break;
