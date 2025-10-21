@@ -75,6 +75,52 @@ static void syscall_close(int fd) {
     t->open_file = NULL;
   }
 }
+static void* find_brk(void){
+    struct thread* t = thread_current();
+    void *addr = NULL;
+    void *max_addr = NULL;
+    // bool find = false;
+    //0x08048000是代码段起始地址，往上去找，直到为空
+    for(addr =(void*)0x08048000; addr < PHYS_BASE; addr += PGSIZE){
+        if(pagedir_get_page(t->pagedir,addr) != NULL){
+            max_addr = addr;
+        }else{
+            break;
+        }
+    }
+    return max_addr;
+}
+/*  您应该确保进程的堆位于进程代码和其他从可执行文件加载的数据之上
+   （即虚拟地址高于该地址）。您应该确定程序加载时堆的起始地址，
+    并在加载后在整个进程运行过程中保持固定。
+
+    以下是如何将新页面映射到进程的虚拟地址空间的方法。
+    1. 使用 palloc_get_page 并传递 PAL_USER 标志从用户池中分配页面。
+    2. 将页面内容清零，方法是使用 memset 或在分配页面时传递 PAL_ZERO 标志
+      （例如 palloc_get_page(PAL_ZERO | PAL_USER)）。
+    3. 使用 pagedir_set_page 将页面映射到进程的虚拟地址空间。
+    4. 当进程退出并调用 pagedir_destroy 时，页面将被释放。或者，
+      如果您希望在其他时间释放页面，可以使用 pagedir_clear_page 将其从页表中删除，
+      然后稍后使用 palloc_free_page 释放它。
+
+      函数会将中断点的位置递增一个字节，并返回上一个中断点的地址（即，如果增量为正数，则返回新映射内存的起始地址）。
+      要获取中断点的当前位置，请传入增量 0。
+*/
+static void* syscall_sbrk(intptr_t increment,void** esp){
+    struct thread *current = thread_current();
+
+    void* brk_addr = find_brk();
+
+  //您应该在 load 函数处理的最后一个可加载段之后的虚拟地址上启动堆。
+  //我们建议选择页面对齐的地址来启动堆。
+  
+  // bool success = false;
+  // uint8_t *kpage =palloc_get_page(PAL_ZERO | PAL_USER);
+  // if(kpage != NULL){
+  //     success = install_page((uint8_t*)PHYS_BASE)
+  // }
+
+}
 
 static void syscall_handler(struct intr_frame* f) {
   uint32_t* args = (uint32_t*)f->esp;

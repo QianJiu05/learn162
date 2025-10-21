@@ -70,7 +70,12 @@ static void start_process(void* file_name_) {
      threads/intr-stubs.S).  Because intr_exit takes all of its
      arguments on the stack in the form of a `struct intr_frame',
      we just point the stack pointer (%esp) to our stack frame
-     and jump to it. */
+     and jump to it. 
+     通过模拟中断返回来启动用户进程，该函数由 intr_exit 实现（位于
+     threads/intr-stubs.S）。由于 intr_exit 将其所有参数都以 
+     `struct intr_frame' 的形式存储在堆栈中，因此，我们只需将
+     堆栈指针 (%esp) 指向我们的堆栈帧，然后跳转到该帧即可。
+  */
   asm volatile("movl %0, %%esp; jmp intr_exit" : : "g"(&if_) : "memory");
   NOT_REACHED();
 }
@@ -162,7 +167,7 @@ struct Elf32_Ehdr {
    There are e_phnum of these, starting at file offset e_phoff
    (see [ELF1] 1-6). */
 struct Elf32_Phdr {
-  Elf32_Word p_type;
+  Elf32_Word p_type;//segment kind
   Elf32_Off p_offset;
   Elf32_Addr p_vaddr;
   Elf32_Addr p_paddr;
@@ -195,12 +200,20 @@ static bool load_segment(struct file* file, off_t ofs, uint8_t* upage, uint32_t 
 /* Loads an ELF executable from FILE_NAME into the current thread.
    Stores the executable's entry point into *EIP
    and its initial stack pointer into *ESP.
-   Returns true if successful, false otherwise. */
+   Returns true if successful, false otherwise.
+
+   将 FILE_NAME 中的 ELF 可执行文件加载到当前线程。
+   将可执行文件的入口点存储到 *EIP 中,
+   并将其初始堆栈指针存储到 *ESP 中。
+   成功则返回 true，否则返回 false。
+*/
 bool load(const char* file_name, void (**eip)(void), void** esp) {
   struct thread* t = thread_current();
   struct Elf32_Ehdr ehdr;
   struct file* file = NULL;
   off_t file_ofs;
+
+  void* max_addr = NULL;
   bool success = false;
   int i;
 
@@ -269,6 +282,11 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
           }
           if (!load_segment(file, file_page, (void*)mem_page, read_bytes, zero_bytes, writable))
             goto done;
+
+          void* segment_end = (void*)(phdr.p_vaddr + phdr.p_memsz);
+          if(segment_end > max_addr){//在循环内，找max
+              max_addr = segment_end;
+          }
         } else
           goto done;
         break;
@@ -283,6 +301,18 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   *eip = (void (*)(void))ehdr.e_entry;
 
   success = true;
+//您应该根据段在内存中的加载位置来确定堆的起始地址。
+//ELF 可执行文件格式保证可加载段在可执行文件中
+//按虚拟地址空间的升序排列。因此，您应该在 load 函数处理
+//的最后一个可加载段之后的虚拟地址上启动堆。我们建议选择
+//页面对齐的地址来启动堆。
+  if(max_addr != NULL){
+      t->heap_start = pg_round_up(max_addr);//向上对其到下一个page
+      t->heap_brk = t->heap_start;
+  }else{
+      t->heap_start = (void*)0x08048000;
+      t->heap_brk = t->heap_start;
+  }
 
 done:
   /* We arrive here whether the load is successful or not. */
@@ -401,7 +431,7 @@ static bool setup_stack(void** esp) {
   if (kpage != NULL) {
     success = install_page(((uint8_t*)PHYS_BASE) - PGSIZE, kpage, true);
     if (success)
-      *esp = PHYS_BASE - 20;
+      *esp = PHYS_BASE - 20;//原本在这里要压入参数，但是这里是简化版本，只简单的往下-20
     else
       palloc_free_page(kpage);
   }
@@ -418,11 +448,11 @@ static bool setup_stack(void** esp) {
    Returns true on success, false if UPAGE is already mapped or
    if memory allocation fails.
    
-  将用户虚拟地址 UPAGE 映射到内核虚拟地址 KPAGE 并添加到页表。
-  如果 WRITABLE 为 true，则用户进程可以修改该页面；
-  否则，该页面为只读。UPAGE 必须尚未映射。
-  KPAGE 可能是从用户池获取的页面。使用 palloc_get_page()。
-  成功时返回 true，如果 UPAGE 已映射或内存分配失败，则返回 false。
+    将用户虚拟地址 UPAGE 映射到内核虚拟地址 KPAGE 并添加到页表。
+    如果 WRITABLE 为 true，则用户进程可以修改该页面；
+    否则，该页面为只读。UPAGE 必须尚未映射。
+    KPAGE 可能是从用户池获取的页面。使用 palloc_get_page()。
+    成功时返回 true，如果 UPAGE 已映射或内存分配失败，则返回 false。
 */
 static bool install_page(void* upage, void* kpage, bool writable) {
   struct thread* t = thread_current();

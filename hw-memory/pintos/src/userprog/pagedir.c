@@ -107,7 +107,11 @@ bool pagedir_set_page(uint32_t* pd, void* upage, void* kpage, bool writable) {
 /* Looks up the physical address that corresponds to user virtual
    address UADDR in PD.  Returns the kernel virtual address
    corresponding to that physical address, or a null pointer if
-   UADDR is unmapped. */
+   UADDR is unmapped.
+   查找与 PD 中的用户虚拟地址 UADDR 对应的物理地址。
+   返回与该物理地址对应的内核虚拟地址；
+   如果 UADDR 未映射，则返回空指针。   
+*/
 void* pagedir_get_page(uint32_t* pd, const void* uaddr) {
   uint32_t* pte;
 
