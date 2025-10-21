@@ -416,7 +416,14 @@ static bool setup_stack(void** esp) {
    KPAGE should probably be a page obtained from the user pool
    with palloc_get_page().
    Returns true on success, false if UPAGE is already mapped or
-   if memory allocation fails. */
+   if memory allocation fails.
+   
+  将用户虚拟地址 UPAGE 映射到内核虚拟地址 KPAGE 并添加到页表。
+  如果 WRITABLE 为 true，则用户进程可以修改该页面；
+  否则，该页面为只读。UPAGE 必须尚未映射。
+  KPAGE 可能是从用户池获取的页面。使用 palloc_get_page()。
+  成功时返回 true，如果 UPAGE 已映射或内存分配失败，则返回 false。
+*/
 static bool install_page(void* upage, void* kpage, bool writable) {
   struct thread* t = thread_current();
 
