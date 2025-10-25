@@ -105,7 +105,9 @@ bool isdir(int fd) { return syscall1(SYS_ISDIR, fd); }
 
 int inumber(int fd) { return syscall1(SYS_INUMBER, fd); }
 
-void* sbrk(intptr_t increment) {
+void* sbrk(intptr_t increment) {//=0时返回当前heap地址
   /* Homework 4: YOUR CODE HERE */
-  return NULL;
+
+  return (void*)syscall1(SYS_SBRK,increment);
+  //应该返回申请的页地址
 }

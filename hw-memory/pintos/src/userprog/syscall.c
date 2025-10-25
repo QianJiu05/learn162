@@ -4,6 +4,7 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/palloc.h"
 #include "threads/vaddr.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
@@ -75,21 +76,21 @@ static void syscall_close(int fd) {
     t->open_file = NULL;
   }
 }
-static void* find_brk(void){
-    struct thread* t = thread_current();
-    void *addr = NULL;
-    void *max_addr = NULL;
-    // bool find = false;
-    //0x08048000是代码段起始地址，往上去找，直到为空
-    for(addr =(void*)0x08048000; addr < PHYS_BASE; addr += PGSIZE){
-        if(pagedir_get_page(t->pagedir,addr) != NULL){
-            max_addr = addr;
-        }else{
-            break;
-        }
-    }
-    return max_addr;
-}
+// static void* find_brk(void){
+//     struct thread* t = thread_current();
+//     void *addr = NULL;
+//     void *max_addr = NULL;
+//     // bool find = false;
+//     //0x08048000是代码段起始地址，往上去找，直到为空
+//     for(addr =(void*)0x08048000; addr < PHYS_BASE; addr += PGSIZE){
+//         if(pagedir_get_page(t->pagedir,addr) != NULL){
+//             max_addr = addr;
+//         }else{
+//             break;
+//         }
+//     }
+//     return max_addr;
+// }
 /*  您应该确保进程的堆位于进程代码和其他从可执行文件加载的数据之上
    （即虚拟地址高于该地址）。您应该确定程序加载时堆的起始地址，
     并在加载后在整个进程运行过程中保持固定。
@@ -106,19 +107,65 @@ static void* find_brk(void){
       函数会将中断点的位置递增一个字节，并返回上一个中断点的地址（即，如果增量为正数，则返回新映射内存的起始地址）。
       要获取中断点的当前位置，请传入增量 0。
 */
-static void* syscall_sbrk(intptr_t increment,void** esp){
+static void* syscall_sbrk(intptr_t increment){
     struct thread *current = thread_current();
+    void *heap_start = current->heap_start;
+    void *old_brk = current->heap_brk;
 
-    void* brk_addr = find_brk();
+    /* 如果用户程序移动段分隔符是为了增加堆的大小，
+    您应该根据需要分配页面并将其映射到用户的虚拟地址空间。
+    如果用户程序移动段分隔符是为了减少堆的大小，
+    您应该根据需要释放不再包含堆部分的页面。
+    只有当段分隔符跨越页面边界时，才需要分配或释放页面。*/
+    if(increment == 0){
+        return current->heap_brk;
+    }
 
-  //您应该在 load 函数处理的最后一个可加载段之后的虚拟地址上启动堆。
-  //我们建议选择页面对齐的地址来启动堆。
-  
-  // bool success = false;
-  // uint8_t *kpage =palloc_get_page(PAL_ZERO | PAL_USER);
-  // if(kpage != NULL){
-  //     success = install_page((uint8_t*)PHYS_BASE)
-  // }
+    void *new_brk = (void*)((uint8_t*)old_brk + increment);
+    if(new_brk < heap_start){
+        return (void*)-1;
+    }
+    if(new_brk >= (void*)PHYS_BASE){
+        return (void*)-1;
+    }
+
+    void* old_page = pg_round_up(old_brk);
+    void* new_page = pg_round_up(new_brk);
+
+    if(increment > 0){//向上增长
+        if(old_page != new_page){//不在一页，要分配page
+            for(void* current_page = old_page;current_page < new_page; 
+                current_page = (void*)((uint8_t*)current_page + PGSIZE)){
+                    void* npage = palloc_get_page(PAL_ZERO | PAL_USER);
+                    if(npage == NULL){/*TODO: 分配失败时把之前的page全都释放*/
+                        printf("npage alloc failed\n");
+                        return (void*)-1;
+                    }
+                    if(!pagedir_set_page(current->pagedir,current_page,npage,true)){
+                        palloc_free_page(npage);
+                        return (void*)-1;
+                    }
+            }
+        }
+        current->heap_brk = new_brk;
+        return old_brk;
+
+
+    }else{
+        if(old_page != new_page){//不在同一页，要进行删除操作
+            for(void* current_page = old_page; current_page > new_page; 
+                current_page = (void*)((uint8_t*)current_page - PGSIZE)){
+
+                void* kpage = pagedir_clear_page(current->pagedir,current_page);
+                if(kpage != NULL){
+                    palloc_free_page(kpage);
+                }
+            }
+
+        }
+        current->heap_brk = new_brk;
+        return new_brk; 
+    }
 
 }
 
@@ -158,7 +205,8 @@ static void syscall_handler(struct intr_frame* f) {
       break;
 
     case SYS_SBRK:
-
+      validate_buffer_in_user_region(&args[1],sizeof(intptr_t));
+      f->eax = (uint32_t)syscall_sbrk((intptr_t)args[1]);
       break;
       
       

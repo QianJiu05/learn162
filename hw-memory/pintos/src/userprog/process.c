@@ -11,6 +11,9 @@
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
+
+#include "threads/thread.h"
+
 #include "threads/flags.h"
 #include "threads/init.h"
 #include "threads/interrupt.h"
@@ -47,7 +50,7 @@ tid_t process_execute(const char* file_name) {
 }
 
 /* A thread function that loads a user process and starts it
-   running. */
+   runnin. */
 static void start_process(void* file_name_) {
   char* file_name = file_name_;
   struct intr_frame if_;
@@ -282,7 +285,8 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
           }
           if (!load_segment(file, file_page, (void*)mem_page, read_bytes, zero_bytes, writable))
             goto done;
-
+            
+          //追踪用户堆
           void* segment_end = (void*)(phdr.p_vaddr + phdr.p_memsz);
           if(segment_end > max_addr){//在循环内，找max
               max_addr = segment_end;
@@ -306,6 +310,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
 //按虚拟地址空间的升序排列。因此，您应该在 load 函数处理
 //的最后一个可加载段之后的虚拟地址上启动堆。我们建议选择
 //页面对齐的地址来启动堆。
+//堆会在最高的段以上，所以只要找到最高的段然后字节对齐一下就行
   if(max_addr != NULL){
       t->heap_start = pg_round_up(max_addr);//向上对其到下一个page
       t->heap_brk = t->heap_start;
@@ -327,7 +332,9 @@ static bool install_page(void* upage, void* kpage, bool writable);
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
 static bool validate_segment(const struct Elf32_Phdr* phdr, struct file* file) {
-  /* p_offset and p_vaddr must have the same page offset. */
+  /* p_offset and p_vaddr must have the same page offset. 
+     p_offset是段在ELF文件中的偏移量，
+     phdr->p_offset & PGMASK 提取的是页内偏移量（最低 12 位）*/
   if ((phdr->p_offset & PGMASK) != (phdr->p_vaddr & PGMASK))
     return false;
 
@@ -380,7 +387,18 @@ static bool validate_segment(const struct Elf32_Phdr* phdr, struct file* file) {
    user process if WRITABLE is true, read-only otherwise.
 
    Return true if successful, false if a memory allocation error
-   or disk read error occurs. */
+   or disk read error occurs.
+
+   加载一个从 FILE 中偏移量 OFS 开始的段，地址为 UPAGE。
+   总共初始化 READ_BYTES + ZERO_BYTES 字节的虚拟内存，如下所示：
+
+   - 必须从 FILE 中偏移量 OFS 开始读取 UPAGE 处的 READ_BYTES 字节。
+   - 必须将 UPAGE 处的 ZERO_BYTES 字节 + READ_BYTES 字节清零。
+
+   如果 WRITABLE 为 true，则此函数初始化的页面必须可由用户进程写入；否则，必须为只读。
+
+   如果成功，则返回 true；如果发生内存分配错误或磁盘读取错误，则返回 false。
+ */
 static bool load_segment(struct file* file, off_t ofs, uint8_t* upage, uint32_t read_bytes,
                          uint32_t zero_bytes, bool writable) {
   ASSERT((read_bytes + zero_bytes) % PGSIZE == 0);

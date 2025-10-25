@@ -99,7 +99,11 @@ struct thread {
 
   struct file* open_file; /* Single open file supported. */
   bool in_syscall;        /* Stores if we are in a syscall. */
-#endif
+
+  /* Memory management for heap */
+  void* heap_start;      // 堆的起始地址（固定不变）
+  void* heap_brk;        // 当前的 break 点（堆的当前末尾）
+  #endif
 
   /* Owned by thread.c. */
   unsigned magic; /* Detects stack overflow. */

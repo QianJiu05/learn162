@@ -84,7 +84,16 @@ static uint32_t* lookup_page(uint32_t* pd, const void* vaddr, bool create) {
    If WRITABLE is true, the new page is read/write;
    otherwise it is read-only.
    Returns true if successful, false if memory allocation
-   failed. */
+   failed. 
+   
+   在页目录 PD 中添加从用户虚拟页UPAGE 到
+   内核虚拟地址 KPAGE 标识的物理帧的映射。
+   UPAGE 必须尚未映射。
+   KPAGE 可能是从用户池获取的页面。
+   使用 palloc_get_page()。
+   如果 WRITABLE 为 true，则新页面可读写；否则为只读。
+   如果成功，则返回 true；如果内存分配失败，则返回 false。
+   */
 bool pagedir_set_page(uint32_t* pd, void* upage, void* kpage, bool writable) {
   uint32_t* pte;
 
