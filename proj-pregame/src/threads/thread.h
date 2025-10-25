@@ -100,6 +100,13 @@ struct thread {
 
   /* Owned by thread.c. */
   unsigned magic; /* Detects stack overflow. */
+
+
+  
+/* Memory management for heap */
+  void* heap_start;      // 堆的起始地址（固定不变）
+  void* heap_brk;        // 当前的 break 点（堆的当前末尾）
+  
 };
 
 /* Types of scheduler that the user can request the kernel
