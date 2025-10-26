@@ -76,21 +76,7 @@ static void syscall_close(int fd) {
     t->open_file = NULL;
   }
 }
-// static void* find_brk(void){
-//     struct thread* t = thread_current();
-//     void *addr = NULL;
-//     void *max_addr = NULL;
-//     // bool find = false;
-//     //0x08048000是代码段起始地址，往上去找，直到为空
-//     for(addr =(void*)0x08048000; addr < PHYS_BASE; addr += PGSIZE){
-//         if(pagedir_get_page(t->pagedir,addr) != NULL){
-//             max_addr = addr;
-//         }else{
-//             break;
-//         }
-//     }
-//     return max_addr;
-// }
+
 /*  您应该确保进程的堆位于进程代码和其他从可执行文件加载的数据之上
    （即虚拟地址高于该地址）。您应该确定程序加载时堆的起始地址，
     并在加载后在整个进程运行过程中保持固定。
@@ -132,41 +118,37 @@ static void* syscall_sbrk(intptr_t increment){
     void* old_page = pg_round_up(old_brk);
     void* new_page = pg_round_up(new_brk);
 
-    if(increment > 0){//向上增长
-        if(old_page != new_page){//不在一页，要分配page
-            for(void* current_page = old_page;current_page < new_page; 
-                current_page = (void*)((uint8_t*)current_page + PGSIZE)){
-                    void* npage = palloc_get_page(PAL_ZERO | PAL_USER);
-                    if(npage == NULL){/*TODO: 分配失败时把之前的page全都释放*/
-                        printf("npage alloc failed\n");
-                        return (void*)-1;
-                    }
-                    if(!pagedir_set_page(current->pagedir,current_page,npage,true)){
-                        palloc_free_page(npage);
-                        return (void*)-1;
-                    }
-            }
-        }
-        current->heap_brk = new_brk;
-        return old_brk;
-
-
-    }else{
-        if(old_page != new_page){//不在同一页，要进行删除操作
-            for(void* current_page = old_page; current_page > new_page; 
-                current_page = (void*)((uint8_t*)current_page - PGSIZE)){
-
-                void* kpage = pagedir_clear_page(current->pagedir,current_page);
-                if(kpage != NULL){
-                    palloc_free_page(kpage);
+    if(old_page != new_page){
+        if(increment > 0){//向上增长
+                for(void* current_page = old_page;current_page < new_page; 
+                    current_page = (void*)((uint8_t*)current_page + PGSIZE)){
+                        void* npage = palloc_get_page(PAL_ZERO | PAL_USER);
+                        if(npage == NULL){/*TODO: 分配失败时把之前的page全都释放*/
+                            printf("npage alloc failed\n");
+                            return (void*)-1;
+                        }
+                        if(!pagedir_set_page(current->pagedir,current_page,npage,true)){
+                            palloc_free_page(npage);
+                            return (void*)-1;
+                        }
                 }
-            }
 
+        }else{//不在同一页，要进行删除操作
+                for(void* current_page = old_page; current_page > new_page; 
+                    current_page = (void*)((uint8_t*)current_page - PGSIZE)){
+                    //找到当前page在kernel 虚拟地址的映射，清除标志位然后free_page
+                    void* kpage = pagedir_get_page(current->pagedir,current_page);
+                    if(kpage != NULL){
+                        pagedir_clear_page(current->pagedir,current_page);
+                        palloc_free_page(kpage);
+                    }
+                }
         }
-        current->heap_brk = new_brk;
-        return new_brk; 
     }
 
+    //一致更新brk并返回旧brk
+    current->heap_brk = new_brk;
+    return old_brk;
 }
 
 static void syscall_handler(struct intr_frame* f) {
