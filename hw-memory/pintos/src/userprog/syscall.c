@@ -145,7 +145,6 @@ static void* syscall_sbrk(intptr_t increment){
                 }
         }
     }
-
     //一致更新brk并返回旧brk
     current->heap_brk = new_brk;
     return old_brk;
