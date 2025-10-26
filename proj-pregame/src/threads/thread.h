@@ -33,6 +33,12 @@ typedef int tid_t;
    thread's kernel stack, which grows downward from the top of
    the page (at offset 4 kB).  Here's an illustration:
 
+   内核线程或用户进程。
+   每个线程结构都存储在其自己的 4 kB 页面中。
+   线程结构本身位于页面的最底部（偏移量为 0）。页面的其余部分保留给
+   线程的内核堆栈，该堆栈从页面顶部（偏移量为 4 kB）向下增长。
+   如下图所示：
+
         4 kB +---------------------------------+
              |          kernel stack           |
              |                |                |
@@ -74,13 +80,39 @@ typedef int tid_t;
    an assertion failure in thread_current(), which checks that
    the `magic' member of the running thread's `struct thread' is
    set to THREAD_MAGIC.  Stack overflow will normally change this
-   value, triggering the assertion. */
+   value, triggering the assertion. 
+   
+   这样做的后果有两个：
+
+    1. 首先，‘struct thread’ 不能增长得太大。
+    如果增长过大，内核堆栈将没有足够的空间。
+    我们的基础‘struct thread’ 只有几个字节大小。
+    它应该保持在 1kB 以下。
+
+    2. 其次，内核堆栈不能增长得太大。
+    如果堆栈溢出，它会破坏线程状态。
+    因此，内核函数不应将大型结构体或数组分配为非静态局部变量。
+    而是使用 malloc() 或 palloc_get_page() 进行动态分配。
+
+    这两个问题的第一个症状可能是
+    thread_current() 中的断言失败，该断言检查正在运行的
+    线程的‘struct thread’ 的‘magic’成员是否
+    设置为 THREAD_MAGIC。堆栈溢出通常会更改此值，从而触发断言。
+   
+   */
 /* The `elem' member has a dual purpose.  It can be an element in
    the run queue (thread.c), or it can be an element in a
    semaphore wait list (synch.c).  It can be used these two ways
    only because they are mutually exclusive: only a thread in the
    ready state is on the run queue, whereas only a thread in the
-   blocked state is on a semaphore wait list. */
+   blocked state is on a semaphore wait list. 
+
+   `elem' 成员具有双重用途。它可以是运行队列（thread.c）中的一个元素，
+   也可以是信号量等待列表（synch.c）中的一个元素。
+   它之所以可以以这两种方式使用，是因为它们是互斥的：
+   只有处于就绪状态的线程才会在运行队列中，
+   而只有处于阻塞状态的线程才会在信号量等待列表中。
+*/
 struct thread {
   /* Owned by thread.c. */
   tid_t tid;                 /* Thread identifier. */
@@ -94,6 +126,9 @@ struct thread {
   struct list_elem elem; /* List element. */
 
 #ifdef USERPROG
+/* Memory management for heap */
+  void* heap_start;      // 堆的起始地址（固定不变）
+  void* heap_brk;        // 当前的 break 点（堆的当前末尾）
   /* Owned by process.c. */
   struct process* pcb; /* Process control block if this thread is a userprog */
 #endif
@@ -103,9 +138,7 @@ struct thread {
 
 
   
-/* Memory management for heap */
-  void* heap_start;      // 堆的起始地址（固定不变）
-  void* heap_brk;        // 当前的 break 点（堆的当前末尾）
+
   
 };
 

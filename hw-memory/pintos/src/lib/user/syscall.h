@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <debug.h>
+// #include "pintos/src/lib/debug.h"
 
 /* Process identifier. */
 typedef int pid_t;
