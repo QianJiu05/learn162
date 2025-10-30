@@ -33,6 +33,8 @@ static void load_alloc_functions() {
 int main() {
   load_alloc_functions();
 
+  
+
   int* data = mm_malloc(sizeof(int));
   assert(data != NULL);
   data[0] = 0x162;

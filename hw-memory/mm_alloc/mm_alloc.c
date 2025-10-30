@@ -16,13 +16,45 @@
 // #include "../pintos/src/threads/thread.h"
 // #include "../pintos/src/lib/kernel/list.h"
 
-struct Metadata{
+struct metadata{
     size_t size;
     bool free;
-    struct Metadata *prev;
-    struct Metadata *next;
+    struct metadata *prev;
+    struct metadata *next;
 };
-typedef struct Metadata head;
+typedef struct metadata Meta;
+
+struct mm_list{
+    size_t free_num;
+    struct metadata *begin;
+    struct metadata *end;
+};
+typedef struct mm_list List;
+
+
+void List_init(List* p){
+    p->begin = NULL;
+    p->end = NULL;
+    p->free_num = 0;
+}
+void List_push(List* p, Meta* node){
+    p->end->next = node;
+    node->prev = p->end;
+    p->end = node;
+}
+Meta* get_block(List* p,size_t size){
+    if(p->free_num != 0){
+        Meta* temp = p->begin;
+        while(temp != p->end){
+            if(temp->size > size){
+                return temp;
+            }
+            temp = temp->next;
+        }
+    }
+}
+
+
 
 
 // struct list* mem_list;
@@ -46,6 +78,7 @@ void* mm_malloc(size_t size) {
 
     if(size ==0)return NULL;
     return NULL;
+    
 
     // for(struct list_elem* temp = list_begin(mem_list);temp != list_end(mem_list); temp = list_next(temp)){
     //     struct Metadata* node = list_entry(temp,struct Metadata, hook);
