@@ -110,29 +110,30 @@ void* mm_malloc(size_t size) {
     return find_memory(header);
 
 }
-/* 传入空间首地址，重新分配 */
+/*  传入空间首地址，重新分配
+    建议的实现方式是先 mm_malloc 一个指定大小的块，
+    将旧数据 memcopy 到新块，然后在最后调用 mm_free(ptr)。*/
 void* mm_realloc(void* ptr, size_t size) {
     if(ptr == NULL){
         return mm_malloc(size);
     }
-
-    // 缩小空间
-    Meta* node = find_metadata(ptr);
-    if(size <= (node->size - sizeof(Meta))){
-        //能够重新制作一个header
-        // node->size = size;
-
-        Meta* new = (void*)((char*)ptr + size);
-        new->size = node->size - size - sizeof(Meta);
-        new->free = true;
-        List_push(&mm_list,new);
-
-        node->size = size;
-        return ptr;//返回原来的ptr就可以了
-    }else{
-        //重新malloc一块内存返回
-        return mm_malloc(size);
+    if(size == 0){
+        mm_free(ptr);
+        return NULL;
     }
+    
+    Meta* header = find_metadata(ptr);
+    if(size == header->size){
+        return ptr;
+    }
+
+    //搬运到新的block
+    Meta* new = mm_malloc(size);
+    void* mm_new = find_memory(new);
+    memcpy(mm_new,ptr,header->size);
+
+    set_zero(new);
+    return mm_new;
 }
 
 /* 传入的是mem的起始地址，要找到header */
