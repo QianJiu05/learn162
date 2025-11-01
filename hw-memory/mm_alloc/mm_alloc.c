@@ -12,10 +12,6 @@
 //add include
 #include <stdbool.h>
 
-// #include "../pintos/src/lib/user/syscall.h"
-// #include "../pintos/src/threads/thread.h"
-// #include "../pintos/src/lib/kernel/list.h"
-
 struct metadata{
     size_t size;
     bool free;
@@ -28,9 +24,13 @@ struct mm_list{
     size_t free_num;
     struct metadata *begin;
     struct metadata *end;
+    // void *brk;
 };
 typedef struct mm_list List;
 
+// void *brk;
+List mm_list;
+bool is_init = false;
 
 void List_init(List* p){
     p->begin = NULL;
@@ -38,116 +38,114 @@ void List_init(List* p){
     p->free_num = 0;
 }
 void List_push(List* p, Meta* node){
-    p->end->next = node;
-    node->prev = p->end;
-    p->end = node;
+    if(p->begin == NULL){
+        p->begin = node;
+        p->end = node;
+    }else{
+        p->end->next = node;
+        node->prev = p->end;
+        p->end = node;
+        node->next = NULL;
+    }
 }
+
+
+Meta* find_metadata(void* ptr){
+    if(ptr == NULL)return NULL;
+    return (Meta*)((char*)ptr - sizeof(Meta));
+}
+void* find_memory(Meta* header){
+    if(header == NULL)return NULL;
+    return (void*)((char*)header + sizeof(Meta));
+}
+
+void set_zero(Meta* header){
+    void* start = find_memory(header);
+    memset(start,0,header->size);
+}
+void merge_next(Meta* header){
+    header->size = header->size + header->next->size + sizeof(Meta);
+
+    Meta* temp = header->next;
+    header->next = temp->next;
+    mm_list.free_num--;
+
+    memset(header->next,0,header->next->size);
+}
+/* 获取block头，alloc只找够大的内存块，不做向后合并的任务 */
 Meta* get_block(List* p,size_t size){
+    //找空闲块
     if(p->free_num != 0){
         Meta* temp = p->begin;
-        while(temp != p->end){
-            if(temp->size > size){
+        while(temp != NULL){
+            if((temp->free == true) && temp->size >= size){
+                p->free_num--;
+                temp->free = false;
                 return temp;
             }
             temp = temp->next;
-        }
+        }        
     }
+    //找不到空闲块，申请一块新的
+    Meta* new = sbrk(sizeof(Meta) + size);
+    printf("new: %p\n",new);
+    if(new == (void*)-1)return NULL;
+
+    new->free = false;
+    new->size = size;
+    set_zero(new);
+    List_push(p,new);
+    return new;
 }
-
-
-
-
-// struct list* mem_list;
-
-// static bool is_init = false;
-
-// struct Metadata* find_metadata(void* ptr){
-//     // return (struct Metadata*)((uint8_t*)ptr - sizeof(struct Metadata));
-//     return NULL;
-// }
 
 void* mm_malloc(size_t size) {
-  //TODO: Implement malloc
-  //内存虽然是以页为单位进行申请，但是brk的增加是与increment有关的，
-  //只是跨页时要申请新的页，所以brk可以表示当前的占用
+    if(is_init == false){
+        List_init(&mm_list);
+        is_init = true;
+    }
 
-    // if(is_init != true){
-    //     list_init(mem_list);
-    //     is_init = true;
-    // }
+    if(size == 0)return NULL;
 
-    if(size ==0)return NULL;
-    return NULL;
-    
+    void* header = get_block(&mm_list,size);
+    return find_memory(header);
 
-    // for(struct list_elem* temp = list_begin(mem_list);temp != list_end(mem_list); temp = list_next(temp)){
-    //     struct Metadata* node = list_entry(temp,struct Metadata, hook);
-    //     if((node->free == true) && (size < node->size)){
-    //         node->free == false;
-    //         void * addr = (uint8_t*)node + sizeof(struct Metadata);
-    //         return addr;
-    //     }
-    // }
-    // //如果还能运行到这里，说明找不到node适配，要申请新的node
-    // void* res = sbrk(size + sizeof(struct Metadata));
-    // if(res == -1)return NULL;//分配失败
-
-    // //初始化
-    // struct Metadata* head = (struct Metadata*)res;
-    // head->free = false;
-    // head->size = size;
-    // list_push_back(mem_list,head->hook);
-
-    // void* retaddr = (void*)((uint8_t*)res + sizeof(struct Metadata));
-
-    // return retaddr;
 }
-
+/* 传入空间首地址，重新分配 */
 void* mm_realloc(void* ptr, size_t size) {
-  //TODO: Implement realloc
-
     if(ptr == NULL){
         return mm_malloc(size);
     }
-    return NULL;
 
-    //size < origin
-    // struct Metadata* node = find_metadata(ptr);
-    // if(size < (node->size - sizeof(struct Metadata))){
-    //     //能够重新制作一个metadata header
-    //     // node->size = size;
+    // 缩小空间
+    Meta* node = find_metadata(ptr);
+    if(size <= (node->size - sizeof(Meta))){
+        //能够重新制作一个header
+        // node->size = size;
 
-    //     struct Metadata* new = (uint8_t*)ptr + size;
-    //     new->size = node->size - size - sizeof(struct Metadata);
-    //     new->free = true;
-    //     list_push_back(mem_list,new->hook);
+        Meta* new = (void*)((char*)ptr + size);
+        new->size = node->size - size - sizeof(Meta);
+        new->free = true;
+        List_push(&mm_list,new);
 
-    //     node->size = size;
-    //     return ptr;//返回原来的ptr就可以了
-    // }else{
-    //     //重新malloc一块内存返回
-    //     void* new = mm_malloc(size);
-    //     if(new != NULL){
-    //         return new;
-    //     }else{
-    //         return NULL;
-    //     }
-    // }
+        node->size = size;
+        return ptr;//返回原来的ptr就可以了
+    }else{
+        //重新malloc一块内存返回
+        return mm_malloc(size);
+    }
 }
 
-void mm_free(void* ptr) {//这个ptr是空间的起始地址，要往下减才能找到metadata
-  //TODO: Implement free
-    //可以用list entry去找metadata吗？
-    // struct Metadata *node = (struct Metadata *)ptr;
-    free(ptr);
-//     node->free = true;
-//     struct list_elem* next_hook = list_next(node->hook);
-
-//     struct Metadata *next = list_entry(next_hook,struct Metadata,hook);
-//     if(next->free == true){
-//         node->size += next->size;
-//         node->hook->next = next->hook->next;
-//         memset(next,0,sizeof(struct Metadata));//清空下一块区域的metadata
-//     }
-//     memset((uint8_t*)node + sizeof(struct Metadata),0,(uint8_t*)node->size -(uint8_t*)node - sizeof(struct Metadata));
+/* 传入的是mem的起始地址，要找到header */
+void mm_free(void* ptr) {
+    if(ptr != NULL){
+        Meta* header = find_metadata(ptr);
+        if((header->next != NULL) && header->next->free == true){
+            merge_next(header);
+        }
+        header->free = true;
+        mm_list.free_num++;
+        if((header->prev != NULL) && header->prev->free == true){
+            merge_next(header->prev);
+        }
+    }
 }
