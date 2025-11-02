@@ -216,7 +216,7 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
   struct file* file = NULL;
   off_t file_ofs;
 
-  void* max_addr = NULL;
+  void* max_addr = (void*)0;
   bool success = false;
   int i;
 
@@ -306,12 +306,12 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
 
   success = true;
 //您应该根据段在内存中的加载位置来确定堆的起始地址。
-//ELF 可执行文件格式保证可加载段在可执行文件中
-//按虚拟地址空间的升序排列。因此，您应该在 load 函数处理
+//ELF 可执行文件格式保证可加载段在可执行文件中按
+//虚拟地址空间的升序排列。因此，您应该在 load 函数处理
 //的最后一个可加载段之后的虚拟地址上启动堆。我们建议选择
 //页面对齐的地址来启动堆。
 //堆会在最高的段以上，所以只要找到最高的段然后字节对齐一下就行
-  if(max_addr != NULL){
+  if(max_addr > (void*)0){
       t->heap_start = pg_round_up(max_addr);//向上对其到下一个page
       t->heap_brk = t->heap_start;
   }else{

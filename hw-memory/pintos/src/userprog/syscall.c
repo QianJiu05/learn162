@@ -121,20 +121,28 @@ static void* syscall_sbrk(intptr_t increment){
     if(old_page != new_page){
         if(increment > 0){//向上增长
                 for(void* current_page = old_page;current_page < new_page; 
-                    current_page = (void*)((uint8_t*)current_page + PGSIZE)){
-                        void* npage = palloc_get_page(PAL_ZERO | PAL_USER);
-                        if(npage == NULL){/*TODO: 分配失败时把之前的page全都释放*/
-                            printf("npage alloc failed\n");
-                            return (void*)-1;
+                        current_page = (void*)((uint8_t*)current_page + PGSIZE)){
+                    void* npage = palloc_get_page(PAL_ZERO | PAL_USER);
+                    if(npage == NULL){/*分配失败时把之前的page全都释放*/
+                        printf("npage alloc failed\n");
+                        for(void* go_back = current_page; go_back > old_page;
+                                go_back = (void*)(uint8_t)(old_page - PGSIZE)){
+                            void* to_clear = pagedir_get_page(current->pagedir,to_clear);
+                            if(to_clear != NULL){
+                                pagedir_clear_page(current->pagedir,to_clear);
+                                palloc_free_page(to_clear);
+                            }
                         }
-                        if(!pagedir_set_page(current->pagedir,current_page,npage,true)){
-                            palloc_free_page(npage);
-                            return (void*)-1;
-                        }
+                        return (void*)-1;
+                    }
+                    if(!pagedir_set_page(current->pagedir,current_page,npage,true)){
+                        palloc_free_page(npage);
+                        return (void*)-1;
+                    }
                 }
 
-        }else{//不在同一页，要进行删除操作
-                for(void* current_page = old_page; current_page > new_page; 
+        }else{//不在同一页，要进行删除操作。oldpage是向上取整的下一页，不参加循环
+                for(void* current_page = old_page - PGSIZE; current_page > new_page; 
                     current_page = (void*)((uint8_t*)current_page - PGSIZE)){
                     //找到当前page在kernel 虚拟地址的映射，清除标志位然后free_page
                     void* kpage = pagedir_get_page(current->pagedir,current_page);
