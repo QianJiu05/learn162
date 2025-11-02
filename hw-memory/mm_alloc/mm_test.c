@@ -32,8 +32,18 @@ static void load_alloc_functions() {
 
 int main() {
   load_alloc_functions();
-
-  
+  int* test[10];
+  for(int i = 0; i < 10; i++){
+      test[i] = mm_malloc(sizeof(int));
+  }
+  printf("Realloc-------------\n");
+  for(int i = 0; i < 10; i++){
+      test[i] = mm_realloc((void*)test[i],sizeof(double));
+  }
+  printf("Free-------------\n");
+  for(int i = 0; i < 10; i++){
+      mm_free(test[i]);
+  }
 
   int* data = mm_malloc(sizeof(int));
   assert(data != NULL);

@@ -48,7 +48,18 @@ void List_push(List* p, Meta* node){
         node->next = NULL;
     }
 }
+void print_block_list(List* p)
+{
+    if(p == NULL)return;
 
+    Meta* temp = p->begin;
+    for(int i = 0; temp != NULL; i++){
+        printf("i = %d, size = %ld, free = %d\n",i,temp->size,temp->free);
+        temp = temp->next;
+    }
+    printf("\n");
+    
+}
 
 Meta* find_metadata(void* ptr){
     if(ptr == NULL)return NULL;
@@ -66,11 +77,17 @@ void set_zero(Meta* header){
 void merge_next(Meta* header){
     header->size = header->size + header->next->size + sizeof(Meta);
 
-    Meta* temp = header->next;
-    header->next = temp->next;
+    Meta* next_blk = header->next;
+    if(next_blk->next != NULL){
+        header->next = next_blk->next;
+        next_blk->next->prev = header;
+    }else{
+        mm_list.end = header;
+        header->next = NULL;
+    }
     mm_list.free_num--;
 
-    memset(header->next,0,header->next->size);
+    // memset(header->next,0,header->next->size);
 }
 /* 获取block头，alloc只找够大的内存块，不做向后合并的任务 */
 Meta* get_block(List* p,size_t size){
@@ -107,6 +124,8 @@ void* mm_malloc(size_t size) {
     if(size == 0)return NULL;
 
     void* header = get_block(&mm_list,size);
+
+    print_block_list(&mm_list);
     return find_memory(header);
 
 }
@@ -121,19 +140,24 @@ void* mm_realloc(void* ptr, size_t size) {
         mm_free(ptr);
         return NULL;
     }
-    
+
     Meta* header = find_metadata(ptr);
     if(size == header->size){
         return ptr;
     }
 
     //搬运到新的block
-    Meta* new = mm_malloc(size);
-    void* mm_new = find_memory(new);
-    memcpy(mm_new,ptr,header->size);
+    void* new = mm_malloc(size);
+    if(new == NULL){
+        return NULL;
+    }
+    // void* mm_new = find_memory(new);
+    memcpy(new,ptr,header->size);
 
-    set_zero(new);
-    return mm_new;
+    mm_free(ptr);
+    // header->free = true;//释放旧的块
+    print_block_list(&mm_list);
+    return new;
 }
 
 /* 传入的是mem的起始地址，要找到header */
@@ -149,4 +173,6 @@ void mm_free(void* ptr) {
             merge_next(header->prev);
         }
     }
+    print_block_list(&mm_list);
 }
+
